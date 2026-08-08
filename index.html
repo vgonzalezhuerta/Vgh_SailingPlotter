@@ -219,6 +219,27 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 .bar>div{height:100%;width:0%;background:var(--brass);transition:width .2s}
 #tiles-prog{font-family:var(--mono);font-size:11px;color:var(--mist);text-align:center}
 
+.secs{display:flex;background:var(--deck);border:1px solid var(--line);border-radius:11px;
+  padding:3px;gap:3px;margin-bottom:12px}
+.secs button{flex:1;border-radius:8px;padding:9px;font-family:var(--disp);text-transform:uppercase;
+  letter-spacing:.08em;font-weight:600;font-size:13px;color:var(--mist)}
+.secs button.on{background:var(--deck2);color:var(--foam)}
+#btn-rec.rec{background:var(--port);color:#fff;border-color:var(--port);animation:lat 1.4s infinite}
+@keyframes lat{50%{opacity:.55}}
+#rec-estado{font-family:var(--disp);text-transform:uppercase;letter-spacing:.16em;font-size:13px;
+  font-weight:700;color:var(--mist);text-align:center;margin-bottom:10px}
+#rec-estado.rec-on{color:var(--port)}
+.rgrow{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:10px 0;
+  border-bottom:1px solid rgba(30,81,99,.5)}
+.rgrow:last-child{border:none}
+.rgmid{min-width:0}
+.rgmid b{font-size:14px;font-weight:500;display:block}
+.rgmid span{font-family:var(--mono);font-size:10.5px;color:var(--mist);line-height:1.4;display:block;margin-top:2px}
+.rgbtns{display:flex;gap:4px;flex-shrink:0}
+.rgbtns button{border:1px solid var(--line);border-radius:8px;padding:6px 7px;
+  font-family:var(--disp);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mist)}
+.rgbtns .del{color:var(--port)}
+
 /* ---------- tabs ---------- */
 #tabs{position:absolute;bottom:0;left:0;right:0;z-index:800;
   display:grid;grid-template-columns:repeat(5,1fr);
@@ -265,6 +286,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
   <button id="btn-follow" class="on" title="Centrar en el barco">Seguir</button>
   <button id="btn-fit" title="Ver todo el recorrido">Todo</button>
   <button id="btn-tap" title="Añadir boya tocando el mapa">+Boya</button>
+  <button id="btn-rec" title="Registrar la derrota">REC</button>
 </div>
 
 <div id="banner"><div class="bn-t">Plóter listo</div><div class="bn-s">Activa el GPS y añade las boyas.</div></div>
@@ -312,8 +334,9 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
   </div>
   <div class="g2" style="margin-top:10px">
     <button class="btn p" id="ed-done">Hecho</button>
-    <button class="btn" id="ed-cancel">Cerrar sin renombrar</button>
+    <button class="btn" id="ed-cancel">Cerrar</button>
   </div>
+  <button class="btn d" id="ed-del" style="margin-top:8px">Borrar esta boya</button>
 </div>
 
 <div id="sheet">
@@ -324,25 +347,66 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 
   <!-- MARCAS -->
   <div class="panel" id="p-marcas">
-    <div class="blk">
-      <h4>Añadir boya</h4>
-      <label class="f" for="coord-in">Coordenadas</label>
-      <input id="coord-in" placeholder="43 21.456 N 008 24.123 O">
-      <div class="g2" style="margin-top:9px">
-        <button class="btn p" id="btn-paste">Añadir coordenadas</button>
-        <button class="btn" id="btn-here">Fondear aquí</button>
-      </div>
-      <p class="hint">También puedes tocar «+Boya» y marcar directamente sobre la carta, o arrastrar
-        cualquier boya para ajustarla. «Fondear aquí» usa tu posición: útil para pinguear los extremos
-        de la línea pasando por delante de cada uno.</p>
+    <div class="secs">
+      <button data-sec="recorrido" class="on">Recorrido</button>
+      <button data-sec="regatas">Regatas</button>
     </div>
-    <div class="blk">
-      <h4>Recorrido</h4>
-      <div class="lista"></div>
-      <div class="g2" style="margin-top:11px">
-        <button class="btn" id="btn-export">Exportar</button>
-        <label class="btn" style="display:grid;place-items:center;margin:0">Importar
-          <input id="imp-file" type="file" accept="application/json" style="display:none"></label>
+
+    <div id="sec-recorrido">
+      <div class="blk">
+        <h4>Añadir boya</h4>
+        <label class="f" for="coord-in">Coordenadas</label>
+        <input id="coord-in" placeholder="43 21.456 N 008 24.123 O">
+        <div class="g2" style="margin-top:9px">
+          <button class="btn p" id="btn-paste">Añadir coordenadas</button>
+          <button class="btn" id="btn-here">Fondear aquí</button>
+        </div>
+        <p class="hint">También puedes tocar «+Boya» y marcar sobre la carta, o arrastrar cualquier
+          boya para ajustarla. «Fondear aquí» usa tu posición: útil para pinguear los extremos de la
+          línea pasando por delante de cada uno.</p>
+      </div>
+      <div class="blk">
+        <h4>Boyas del recorrido</h4>
+        <div class="lista"></div>
+        <div class="g2" style="margin-top:11px">
+          <button class="btn" id="btn-export">Exportar boyas</button>
+          <label class="btn" style="display:grid;place-items:center;margin:0">Importar boyas
+            <input id="imp-file" type="file" accept="application/json" style="display:none"></label>
+        </div>
+        <button class="btn d" id="btn-borrar-todas" style="margin-top:9px">Borrar todas las boyas</button>
+        <p class="hint">Toca ⌖ para afinar coordenadas con las ruletas, ✕ para borrar una boya
+          suelta. Las flechas cambian el orden en que se rodean.</p>
+      </div>
+    </div>
+
+    <div id="sec-regatas" style="display:none">
+      <div class="blk">
+        <h4>Registro de la derrota</h4>
+        <div id="rec-estado">parado</div>
+        <div id="rec-datos"></div>
+        <div class="g2" style="margin-top:11px">
+          <button class="btn p" id="btn-grabar">Empezar a registrar</button>
+          <button class="btn" id="btn-evento">Marcar momento</button>
+        </div>
+        <button class="btn d" id="btn-limpiar" style="margin-top:9px">Descartar derrota</button>
+        <p class="hint">La derrota se pinta con el color de la amura: verde estribor, rojo babor.
+          La salida del cronómetro y cada paso de boya quedan anotados solos.</p>
+      </div>
+      <div class="blk">
+        <h4>Guardar esta regata</h4>
+        <label class="f" for="rg-nombre">Nombre</label>
+        <input id="rg-nombre" placeholder="Trofeo de primavera, 2ª prueba">
+        <button class="btn p" id="btn-guardar-rg" style="margin-top:10px">Guardar boyas y derrota</button>
+        <div class="g2" style="margin-top:9px">
+          <button class="btn" id="btn-gpx">Exportar GPX</button>
+          <button class="btn" id="btn-json">Exportar JSON</button>
+        </div>
+        <p class="hint">El GPX lo abre cualquier programa de análisis de derrotas y también Google
+          Earth. El JSON conserva además viento, eventos y ángulos del barco.</p>
+      </div>
+      <div class="blk">
+        <h4>Regatas guardadas</h4>
+        <div class="biblio"></div>
       </div>
     </div>
   </div>
@@ -498,7 +562,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 </div>
 
 <nav id="tabs">
-  <button data-p="marcas"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-5.6 7-11a7 7 0 10-14 0c0 5.4 7 11 7 11z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.4" fill="currentColor"/></svg>Boyas</button>
+  <button data-p="marcas"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-5.6 7-11a7 7 0 10-14 0c0 5.4 7 11 7 11z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.4" fill="currentColor"/></svg>Regata</button>
   <button data-p="tactica"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor"/></svg>Táctica</button>
   <button data-p="viento"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8h11a3 3 0 10-3-3M3 13h15a3 3 0 11-3 3M3 18h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Viento</button>
   <button data-p="mqtt"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20a16 16 0 0116-16M4 20a10 10 0 0110-10M4 20a4 4 0 014-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Sensores</button>
@@ -964,6 +1028,7 @@ function iniciarGPS() {
       };
       S.gpsErr = null;
       estado("gps", `±${Math.round(p.coords.accuracy)} m`, true);
+      registrarPunto();
       if (S.followBoat && !mapCentrado) { map.setView([S.fix.lat, S.fix.lon], 15); mapCentrado = true; }
       render();
     },
@@ -1159,6 +1224,7 @@ function beep(f, d, v = .5) {
 }
 function arrancarCrono(s) {
   beep(880, .1, .3);
+  anotar("salida", `Secuencia de ${s / 60} min iniciada`);
   zero = Date.now() + s * 1000; fired = new Set();
   navigator.wakeLock?.request("screen").catch(() => {});
 }
@@ -1210,6 +1276,7 @@ function pasoSim() {
   S.fix = { lat: p.lat, lon: p.lon, acc: 4, sog: sim.sog, cog: sim.hdg, ts: Date.now() };
   S.hdgDev = sim.hdg;
   estado("gps", "simulado", true);
+  registrarPunto();
 
   /* aparente a partir del real: así se ejercita el mismo cálculo que con la veleta */
   const twaRel = n180(w - sim.hdg);              // + = viento por estribor
@@ -1236,6 +1303,274 @@ function pintarSim() {
   $("#sim-sog").textContent = sim.sog.toFixed(1);
   $("#sim-twd").textContent = pad3(sim.twd) + "°";
   $("#sim-tws").textContent = sim.tws.toFixed(0);
+}
+
+/* =====================================================================
+   Registro de la regata: derrota, eventos y biblioteca
+   ===================================================================== */
+
+let track = [], eventos = [], grabando = false, tInicio = null;
+let trackGrupo = null, segmentos = [];
+
+function amuraDe(p) {
+  if (p.twd == null || p.cog == null) return "n";
+  const twa = n180(p.cog - p.twd);
+  if (Math.abs(twa) > 160) return "n";
+  return twa < 0 ? "s" : "p";
+}
+const COL_AMURA = { s: "#3FCB7D", p: "#E24B4B", n: "#87A8B3" };
+
+function registrarPunto() {
+  if (!grabando || !S.fix) return;
+  const w = vientoReal();
+  const p = {
+    t: Date.now(), lat: S.fix.lat, lon: S.fix.lon,
+    sog: S.fix.sog ?? null, cog: rumbo() ?? S.fix.cog ?? null,
+    twd: w.twd ?? null, tws: w.tws ?? null,
+  };
+  const ult = track[track.length - 1];
+  if (ult) {
+    const dt = (p.t - ult.t) / 1000;
+    if (dt < 1) return;
+    if (dt < 5 && distM(ult, p) < 1.5) return;      // fondeado: no engordamos el archivo
+  }
+  track.push(p);
+  pintarSegmento(p, ult);
+  if (panelActivo === "marcas") actualizarRec();
+}
+
+function pintarSegmento(p, ult) {
+  if (!trackGrupo) trackGrupo = L.layerGroup().addTo(map);
+  if (!ult) return;
+  const a = amuraDe(p);
+  const ultimo = segmentos[segmentos.length - 1];
+  if (ultimo && ultimo.amura === a) ultimo.linea.addLatLng([p.lat, p.lon]);
+  else {
+    const linea = L.polyline([[ult.lat, ult.lon], [p.lat, p.lon]],
+      { color: COL_AMURA[a], weight: 3, opacity: .85 }).addTo(trackGrupo);
+    segmentos.push({ amura: a, linea });
+  }
+}
+
+function repintarTrack() {
+  if (trackGrupo) trackGrupo.clearLayers();
+  segmentos = [];
+  for (let i = 1; i < track.length; i++) pintarSegmento(track[i], track[i - 1]);
+}
+
+function anotar(tipo, texto) {
+  if (!grabando) return;
+  eventos.push({ t: Date.now(), tipo, texto });
+  if (panelActivo === "marcas") actualizarRec();
+}
+
+function resumenTrack(tk = track, ev = eventos) {
+  if (tk.length < 2) return { dist: 0, dur: 0, vMax: 0, vMed: 0, viradas: 0, puntos: tk.length };
+  let dist = 0, vMax = 0, viradas = 0, ultAmura = null, tUltVirada = 0;
+  for (let i = 1; i < tk.length; i++) {
+    dist += distM(tk[i - 1], tk[i]);
+    if (tk[i].sog != null) vMax = Math.max(vMax, tk[i].sog);
+    const a = amuraDe(tk[i]);
+    if (a !== "n") {
+      if (ultAmura && a !== ultAmura && tk[i].t - tUltVirada > 20000) {
+        viradas++; tUltVirada = tk[i].t;
+      }
+      ultAmura = a;
+    }
+  }
+  const dur = (tk[tk.length - 1].t - tk[0].t) / 1000;
+  return {
+    dist, dur, vMax, viradas, puntos: tk.length,
+    vMed: dur > 0 ? (dist / NM) / (dur / 3600) : 0,
+    eventos: ev.length,
+  };
+}
+
+function fmtHMS(s) {
+  s = Math.round(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h} h ${pad2(m)} min` : `${m} min ${pad2(s % 60)} s`;
+}
+
+function toggleGrabar() {
+  grabando = !grabando;
+  $("#btn-rec").classList.toggle("rec", grabando);
+  if (grabando) {
+    if (!track.length) { tInicio = Date.now(); eventos = []; }
+    anotar("inicio", "Comienza el registro");
+    navigator.wakeLock?.request("screen").catch(() => {});
+  } else anotar("pausa", "Registro pausado");
+  actualizarRec();
+}
+
+function limpiarTrack() {
+  if (track.length && !confirm("¿Descartar la derrota registrada sin guardarla?")) return;
+  track = []; eventos = []; tInicio = null; grabando = false;
+  $("#btn-rec").classList.remove("rec");
+  if (trackGrupo) trackGrupo.clearLayers();
+  segmentos = [];
+  actualizarRec();
+}
+
+/* ---------- IndexedDB ---------- */
+function abrirDB() {
+  return new Promise((ok, ko) => {
+    const r = indexedDB.open("ploter-regatas", 1);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      if (!d.objectStoreNames.contains("regatas")) d.createObjectStore("regatas", { keyPath: "id" });
+    };
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => ko(r.error);
+  });
+}
+async function dbGuardar(o) {
+  const d = await abrirDB();
+  return new Promise((ok, ko) => {
+    const t = d.transaction("regatas", "readwrite");
+    t.objectStore("regatas").put(o);
+    t.oncomplete = ok; t.onerror = () => ko(t.error);
+  });
+}
+async function dbTodas() {
+  const d = await abrirDB();
+  return new Promise((ok, ko) => {
+    const r = d.transaction("regatas", "readonly").objectStore("regatas").getAll();
+    r.onsuccess = () => ok(r.result.sort((a, b) => b.fecha - a.fecha));
+    r.onerror = () => ko(r.error);
+  });
+}
+async function dbBorrar(id) {
+  const d = await abrirDB();
+  return new Promise((ok, ko) => {
+    const t = d.transaction("regatas", "readwrite");
+    t.objectStore("regatas").delete(id);
+    t.oncomplete = ok; t.onerror = () => ko(t.error);
+  });
+}
+
+/* ---------- guardar, cargar, exportar ---------- */
+async function guardarRegata() {
+  const nombre = ($("#rg-nombre").value || "").trim() ||
+    `Regata ${new Date().toLocaleDateString("es-ES")}`;
+  if (!S.marks.length && track.length < 2) { alert("No hay nada que guardar todavía."); return; }
+  const o = {
+    id: uid(), nombre, fecha: Date.now(),
+    marks: JSON.parse(JSON.stringify(S.marks)),
+    track: track.slice(), eventos: eventos.slice(),
+    ajustes: { upAngle: S.upAngle, downAngle: S.downAngle },
+    resumen: resumenTrack(),
+  };
+  try {
+    await dbGuardar(o);
+    $("#rg-nombre").value = "";
+    await pintarBiblioteca();
+    alert(`Guardada «${nombre}».`);
+  } catch (e) { alert("No se ha podido guardar: " + e); }
+}
+
+async function cargarRegata(id) {
+  const todas = await dbTodas();
+  const r = todas.find((x) => x.id === id);
+  if (!r) return;
+  if (!confirm(`Cargar «${r.nombre}» sustituirá las boyas y la derrota actuales. ¿Seguimos?`)) return;
+  S.marks = r.marks.map((m) => ({ ...m, id: m.id || uid() }));
+  S.activeIdx = 0;
+  track = r.track || []; eventos = r.eventos || [];
+  grabando = false; $("#btn-rec").classList.remove("rec");
+  if (r.ajustes) { S.upAngle = r.ajustes.upAngle; S.downAngle = r.ajustes.downAngle;
+    $("#up-ang").value = S.upAngle; $("#dn-ang").value = S.downAngle; }
+  guardar(); pintarMarcas(); repintarTrack(); pintarPanelMarcas(); actualizarRec(); render();
+  const pts = [...S.marks.map((m) => [m.lat, m.lon]), ...track.map((p) => [p.lat, p.lon])];
+  if (pts.length) map.fitBounds(pts, { padding: [50, 50] });
+}
+
+function descargar(nombre, texto, tipo) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([texto], { type: tipo }));
+  a.download = nombre; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function aGPX(r) {
+  const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+  const iso = (t) => new Date(t).toISOString();
+  const wpts = (r.marks || []).map((m) =>
+    `  <wpt lat="${m.lat.toFixed(7)}" lon="${m.lon.toFixed(7)}">\n` +
+    `    <name>${esc(m.name)}</name>\n    <type>${esc(ROLES[m.role]?.label || m.role)}</type>\n  </wpt>`).join("\n");
+  const pts = (r.track || []).map((p) =>
+    `      <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}">\n` +
+    `        <time>${iso(p.t)}</time>\n` +
+    (p.cog != null ? `        <course>${p.cog.toFixed(1)}</course>\n` : "") +
+    (p.sog != null ? `        <speed>${(p.sog / KN).toFixed(2)}</speed>\n` : "") +
+    `      </trkpt>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Plóter de regata" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>${esc(r.nombre)}</name><time>${iso(r.fecha)}</time></metadata>
+${wpts}
+  <trk><name>${esc(r.nombre)}</name><trkseg>
+${pts}
+  </trkseg></trk>
+</gpx>`;
+}
+
+async function exportarGPX(id) {
+  const r = id ? (await dbTodas()).find((x) => x.id === id)
+               : { nombre: "Regata en curso", fecha: Date.now(), marks: S.marks, track };
+  if (!r) return;
+  descargar(r.nombre.replace(/\W+/g, "-") + ".gpx", aGPX(r), "application/gpx+xml");
+}
+async function exportarJSON(id) {
+  const r = id ? (await dbTodas()).find((x) => x.id === id)
+               : { nombre: "Regata en curso", fecha: Date.now(), marks: S.marks, track, eventos,
+                   resumen: resumenTrack() };
+  if (!r) return;
+  descargar(r.nombre.replace(/\W+/g, "-") + ".json", JSON.stringify(r, null, 1), "application/json");
+}
+
+async function pintarBiblioteca() {
+  const c = $("#p-marcas .biblio");
+  if (!c) return;
+  let todas = [];
+  try { todas = await dbTodas(); } catch (e) { c.innerHTML = `<p class="hint">Sin almacenamiento.</p>`; return; }
+  if (!todas.length) { c.innerHTML = `<p class="hint">Todavía no has guardado ninguna regata.</p>`; return; }
+  c.innerHTML = todas.map((r) => {
+    const s = r.resumen || {};
+    return `<div class="rgrow">
+      <div class="rgmid">
+        <b>${r.nombre}</b>
+        <span>${new Date(r.fecha).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+          · ${(r.marks || []).length} boyas
+          ${s.dist ? `· ${(s.dist / NM).toFixed(1)} NM · ${fmtHMS(s.dur)} · ${s.viradas} viradas` : "· sin derrota"}</span>
+      </div>
+      <div class="rgbtns">
+        <button data-load="${r.id}">Cargar</button>
+        <button data-gpx="${r.id}">GPX</button>
+        <button data-json="${r.id}">JSON</button>
+        <button data-drop="${r.id}" class="del">✕</button>
+      </div></div>`;
+  }).join("");
+  c.querySelectorAll("[data-load]").forEach((b) => b.onclick = () => cargarRegata(b.dataset.load));
+  c.querySelectorAll("[data-gpx]").forEach((b) => b.onclick = () => exportarGPX(b.dataset.gpx));
+  c.querySelectorAll("[data-json]").forEach((b) => b.onclick = () => exportarJSON(b.dataset.json));
+  c.querySelectorAll("[data-drop]").forEach((b) => b.onclick = async () => {
+    if (confirm("¿Borrar esta regata guardada? No se puede deshacer.")) {
+      await dbBorrar(b.dataset.drop); pintarBiblioteca();
+    }
+  });
+}
+
+function actualizarRec() {
+  const s = resumenTrack();
+  $("#rec-estado").textContent = grabando ? "GRABANDO" : (track.length ? "en pausa" : "parado");
+  $("#rec-estado").className = grabando ? "rec-on" : "";
+  $("#rec-datos").innerHTML =
+    `<div class="row"><span>Duración</span><b>${fmtHMS(s.dur)}</b></div>` +
+    `<div class="row"><span>Distancia navegada</span><b>${(s.dist / NM).toFixed(2)} NM</b></div>` +
+    `<div class="row"><span>Velocidad media / máxima</span><b>${s.vMed.toFixed(1)} / ${s.vMax.toFixed(1)} kn</b></div>` +
+    `<div class="row"><span>Viradas y trasluchadas</span><b>${s.viradas}</b></div>` +
+    `<div class="row"><span>Puntos y eventos</span><b>${s.puntos} · ${eventos.length}</b></div>`;
+  $("#btn-grabar").textContent = grabando ? "Pausar registro" : (track.length ? "Reanudar" : "Empezar a registrar");
 }
 
 /* =====================================================================
@@ -1482,6 +1817,16 @@ function cerrarEditor(guardando) {
   editId = null;
   guardar(); pintarMarcas(); pintarPanelMarcas(); render();
 }
+function borrarDesdeEditor() {
+  const m = S.marks.find((x) => x.id === editId);
+  if (!m) return;
+  if (!confirm(`¿Borrar «${m.name}»?`)) return;
+  const id = editId;
+  $("#editor").classList.remove("on");
+  editId = null;
+  borrarMarca(id);
+}
+
 function nudge(eje, delta) {   /* botones finos: ±0.001' */
   editVal[eje] += (editVal[eje] < 0 ? -1 : 1) * delta / 60000;
   sincronizarRuletas(); refrescarEditor();
@@ -1522,6 +1867,7 @@ function avanzarSiLlego() {
   if (!S.autoAdvance || !S.fix) return;
   const m = marcaActiva(); if (!m) return;
   if (distM(S.fix, m) < S.arrivalRadius && S.activeIdx < S.marks.length - 1) {
+    anotar("boya", `Paso por ${m.name}`);
     S.activeIdx++; beep(1200, .25); pintarMarcas(); guardar();
   }
 }
@@ -1836,6 +2182,35 @@ function initUI() {
   $("#hdg-src").onchange = (e) => { S.hdgSource = e.target.value; guardar(); render(); };
   $("#decl").onchange = (e) => { S.decl = Number(e.target.value) || 0; guardar(); render(); };
   $("#btn-diag").onclick = () => { revisarPermiso(); pintarDiag(); };
+
+  /* registro y biblioteca */
+  $("#btn-rec").onclick = toggleGrabar;
+  $("#btn-grabar").onclick = toggleGrabar;
+  $("#btn-evento").onclick = () => {
+    const t = prompt("Nota para este momento:", "");
+    if (t) { if (!grabando) { grabando = true; $("#btn-rec").classList.add("rec"); } anotar("nota", t); }
+  };
+  $("#btn-limpiar").onclick = limpiarTrack;
+  $("#btn-guardar-rg").onclick = guardarRegata;
+  $("#btn-gpx").onclick = () => exportarGPX(null);
+  $("#btn-json").onclick = () => exportarJSON(null);
+  $("#btn-borrar-todas").onclick = () => {
+    if (!S.marks.length) return;
+    if (confirm(`¿Borrar las ${S.marks.length} boyas del recorrido?`)) {
+      S.marks = []; S.activeIdx = 0;
+      guardar(); pintarMarcas(); pintarPanelMarcas(); render();
+    }
+  };
+  $("#ed-del").onclick = borrarDesdeEditor;
+
+  /* secciones del panel de recorrido */
+  $$("[data-sec]").forEach((b) => b.onclick = () => {
+    const s = b.dataset.sec;
+    $$("[data-sec]").forEach((x) => x.classList.toggle("on", x === b));
+    $("#sec-recorrido").style.display = s === "recorrido" ? "" : "none";
+    $("#sec-regatas").style.display = s === "regatas" ? "" : "none";
+    if (s === "regatas") { actualizarRec(); pintarBiblioteca(); }
+  });
 
   /* cartas sin conexión */
   $("#btn-tiles").onclick = () => descargarCartas(+$("#z-min").value, +$("#z-max").value);
