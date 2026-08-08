@@ -602,7 +602,10 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
     <div class="blk">
       <h4>Diagnóstico</h4>
       <div class="diag"></div>
-      <button class="btn" id="btn-diag" style="margin-top:10px">Volver a comprobar</button>
+      <div class="g2" style="margin-top:10px">
+        <button class="btn" id="btn-diag">Volver a comprobar</button>
+        <button class="btn d" id="btn-refresh">Forzar actualización</button>
+      </div>
       <p class="hint">Sirve este archivo por HTTPS (GitHub Pages, Netlify o el servidor del barco) y
         añádelo a la pantalla de inicio. En <code>file://</code> el navegador bloquea GPS y brújula
         sin avisar.</p>
@@ -625,6 +628,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
    PLÓTER DE REGATA — núcleo
    ===================================================================== */
 
+const VERSION = "2026-08-08 · 7";
 const NM = 1852;
 const KN = 1.94384;                       // m/s -> nudos
 const R_EARTH = 6371000;
@@ -1068,6 +1072,7 @@ let watchId = null;
 
 function diagnostico() {
   const d = [];
+  d.push(["Versión cargada", VERSION, "brass"]);
   const seguro = window.isSecureContext;
   d.push(["Origen", location.protocol + "//" + (location.hostname || "(archivo local)")]);
   d.push(["Contexto seguro", seguro ? "sí" : "NO — el GPS está bloqueado", seguro ? "stbd" : "port"]);
@@ -2500,10 +2505,14 @@ function abrirPanel(id) {
   if (panelActivo === "viento") { pintarViento(); traerMeteo(false); }
   if (panelActivo === "mqtt") { pintarMapeo(); pintarLog(); }
   if (panelActivo === "tactica") render();
-  if (panelActivo === "manual" && !$("#p-manual .glos").innerHTML) {
-    $("#rosa-rumbos").innerHTML = rosaRumbos();
-    pintarDiagramas();
-    pintarManual();
+  if (panelActivo === "manual") {
+    try { $("#rosa-rumbos").innerHTML = rosaRumbos(); } catch (e) { console.error("rosa", e); }
+    try { pintarDiagramas(); } catch (e) {
+      console.error("diagramas", e);
+      $("#diagramas").innerHTML = `<div class="blk"><p class="hint">No se han podido dibujar los
+        gráficos: ${e.message}</p></div>`;
+    }
+    try { pintarManual($("#glos-buscar").value || ""); } catch (e) { console.error("glosario", e); }
   }
   if (panelActivo === "ajustes") { pintarDiag(); revisarPermiso(); estimarMosaicos(); medirAlmacenamiento(); }
 }
@@ -2597,6 +2606,17 @@ function initUI() {
   $("#hdg-src").onchange = (e) => { S.hdgSource = e.target.value; guardar(); render(); };
   $("#decl").onchange = (e) => { S.decl = Number(e.target.value) || 0; guardar(); render(); };
   $("#btn-diag").onclick = () => { revisarPermiso(); pintarDiag(); };
+  $("#btn-refresh").onclick = async () => {
+    if (!confirm("Se borrará la app guardada y se recargará desde el servidor.\n\n" +
+      "Las cartas descargadas, las boyas y las regatas NO se tocan.")) return;
+    try {
+      const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
+      await Promise.all(regs.map((r) => r.unregister()));
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== "ploter-tiles").map((k) => caches.delete(k)));
+    } catch (e) {}
+    location.reload(true);
+  };
 
   /* registro y biblioteca */
   $("#btn-rec").onclick = toggleGrabar;
