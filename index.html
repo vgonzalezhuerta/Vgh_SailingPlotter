@@ -1,0 +1,1903 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#06161E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Plóter de regata</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#06161E; --deck:#0D2934; --deck2:#123542; --line:#1E5163;
+  --foam:#EAF2F4; --mist:#87A8B3; --brass:#E8B04B;
+  --port:#E24B4B; --stbd:#3FCB7D; --sky:#4FA8E8;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --disp:'Barlow Condensed','Arial Narrow',sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--ink);color:var(--foam);
+  font-family:var(--body);-webkit-font-smoothing:antialiased}
+button,input,select{font-family:inherit;color:inherit;font-size:16px}
+button{background:none;border:none;cursor:pointer}
+code{font-family:var(--mono);font-size:11px;color:var(--brass)}
+
+#map{position:absolute;inset:0;background:#0a2029}
+.leaflet-container{background:#0a2029;font-family:var(--body)}
+.leaflet-control-attribution{background:rgba(6,22,30,.75)!important;color:var(--mist)!important;font-size:9px}
+.leaflet-control-attribution a{color:var(--mist)!important}
+.leaflet-bar a{background:var(--deck)!important;color:var(--foam)!important;border-color:var(--line)!important}
+
+/* ---------- HUD ---------- */
+#hud{position:absolute;top:0;left:0;right:0;z-index:600;
+  background:linear-gradient(180deg,rgba(6,22,30,.96),rgba(6,22,30,.82) 70%,transparent);
+  padding:calc(6px + env(safe-area-inset-top)) 10px 16px;pointer-events:none}
+.hudgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;align-items:end}
+.cell{text-align:center}
+.cell .lab{font-family:var(--disp);text-transform:uppercase;letter-spacing:.14em;
+  font-size:9px;color:var(--mist);display:block}
+.cell .val{font-family:var(--mono);font-size:21px;font-weight:600;line-height:1.05;
+  font-variant-numeric:tabular-nums}
+.cell.wind .val{color:var(--brass)}
+#hud-src{font-family:var(--disp);font-size:9px;color:var(--mist);letter-spacing:.1em;
+  text-transform:uppercase;text-align:center;margin-top:2px}
+#windwrap{position:relative;display:flex;justify-content:center;margin-bottom:2px}
+
+#chips{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;pointer-events:auto}
+.chip{display:flex;align-items:center;gap:5px;background:var(--deck);border:1px solid var(--line);
+  border-radius:99px;padding:3px 9px;font-family:var(--disp);text-transform:uppercase;
+  letter-spacing:.1em;font-size:10px;color:var(--mist)}
+.chip::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--port)}
+.chip[data-ok="1"]::before{background:var(--stbd)}
+.chip[data-ok="1"]{color:var(--foam)}
+
+/* ---------- banner ---------- */
+#banner{position:absolute;left:10px;right:10px;z-index:600;
+  bottom:calc(64px + env(safe-area-inset-bottom));
+  background:rgba(13,41,52,.95);border:1px solid var(--line);border-left:4px solid var(--brass);
+  border-radius:12px;padding:10px 13px;backdrop-filter:blur(6px)}
+.bn-t{font-family:var(--disp);text-transform:uppercase;letter-spacing:.05em;
+  font-weight:700;font-size:19px;line-height:1.1}
+.bn-s{font-size:12.5px;color:var(--mist);margin-top:3px;line-height:1.35}
+.stbd{color:var(--stbd)} .port{color:var(--port)} .brass{color:var(--brass)}
+
+/* ---------- botonera flotante ---------- */
+#tools{position:absolute;right:10px;z-index:600;
+  bottom:calc(146px + env(safe-area-inset-bottom));display:grid;gap:7px}
+#tools button{width:44px;height:44px;border-radius:12px;background:rgba(13,41,52,.94);
+  border:1px solid var(--line);display:grid;place-items:center;
+  font-family:var(--disp);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--mist);line-height:1.05;padding:2px}
+#tools button.on{background:var(--brass);color:#12212A;border-color:var(--brass)}
+
+/* ---------- marcas y barco ---------- */
+.mk{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:5px;
+  white-space:nowrap;pointer-events:auto}
+.mk-n{width:22px;height:22px;border-radius:99px;background:var(--ink);border:2.5px solid var(--c);
+  color:var(--c);display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:600}
+.mk-l{font-family:var(--disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--foam);text-shadow:0 0 4px #06161E,0 0 4px #06161E}
+.mk.act .mk-n{background:var(--c);color:#06161E;box-shadow:0 0 0 4px rgba(232,176,75,.25)}
+.boat{width:34px;height:46px;transform-origin:50% 50%}
+
+/* ---------- sheet ---------- */
+#sheet{position:absolute;left:0;right:0;bottom:0;z-index:700;
+  background:var(--ink);border-top:1px solid var(--line);
+  border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .22s ease;
+  max-height:74vh;display:flex;flex-direction:column;
+  padding-bottom:calc(56px + env(safe-area-inset-bottom))}
+#sheet.open{transform:translateY(0)}
+#sheet-head{display:flex;justify-content:space-between;align-items:center;
+  padding:12px 16px 8px;border-bottom:1px solid var(--line)}
+#sheet-title{font-family:var(--disp);text-transform:uppercase;letter-spacing:.14em;
+  font-size:13px;font-weight:600;color:var(--mist)}
+#sheet-close{font-size:20px;color:var(--mist);padding:0 6px}
+.panel{display:none;overflow-y:auto;padding:14px 16px 20px;-webkit-overflow-scrolling:touch}
+.panel.on{display:block}
+
+.blk{background:var(--deck);border:1px solid var(--line);border-radius:12px;padding:13px;margin-bottom:11px}
+.blk h4{font-family:var(--disp);text-transform:uppercase;letter-spacing:.14em;font-size:11px;
+  font-weight:600;color:var(--mist);margin:0 0 9px}
+.hint{font-size:12px;color:var(--mist);line-height:1.45;margin:8px 0 0}
+label.f{display:block;font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;
+  font-size:10px;color:var(--mist);margin:0 0 4px}
+input,select{background:var(--ink);border:1px solid var(--line);border-radius:9px;
+  padding:9px 10px;color:var(--foam);width:100%;font-family:var(--mono);font-size:14px}
+input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+.btn{background:var(--deck2);border:1px solid var(--line);border-radius:10px;padding:11px;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-weight:600;
+  font-size:13px;width:100%;min-height:44px}
+.btn.p{background:var(--brass);color:#12212A;border-color:var(--brass)}
+.btn.d{color:var(--port)}
+.btn:active{transform:scale(.985)}
+
+.row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;
+  border-bottom:1px solid rgba(30,81,99,.5);font-size:13px}
+.row:last-child{border:none}
+.row b{font-family:var(--mono);font-weight:600}
+
+.mrow{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;
+  padding:9px 0;border-bottom:1px solid rgba(30,81,99,.5)}
+.mrow.act{background:rgba(232,176,75,.07);border-radius:8px;padding:9px 6px}
+.mnum{width:28px;height:28px;border-radius:99px;border:2px solid var(--c);color:var(--c);
+  font-family:var(--mono);font-size:12px;background:var(--ink)}
+.mrow.act .mnum{background:var(--c);color:#06161E}
+.mmid{min-width:0}
+.mname{padding:5px 7px;font-family:var(--body);font-size:14px}
+.mco{font-family:var(--mono);font-size:10.5px;color:var(--mist);margin-top:3px}
+.mrole{grid-column:2;padding:5px 7px;font-size:12px;font-family:var(--body)}
+.mbtns{display:flex;gap:3px;grid-row:1/3;align-self:center}
+.mbtns button{width:26px;height:30px;border:1px solid var(--line);border-radius:7px;
+  color:var(--mist);font-size:11px}
+.mbtns .del{color:var(--port)}
+
+.mqrow{padding:9px 0;border-bottom:1px solid rgba(30,81,99,.5)}
+.mqlab{font-size:12px;color:var(--mist);display:flex;justify-content:space-between;margin-bottom:5px}
+.mqv{font-family:var(--mono);color:var(--brass);font-weight:600}
+.mqin{display:grid;grid-template-columns:1.5fr 1fr 46px;gap:5px}
+.mqin input{padding:7px 8px;font-size:12px}
+.lrow{display:flex;justify-content:space-between;gap:8px;align-items:center;
+  padding:7px 0;border-bottom:1px solid rgba(30,81,99,.5)}
+.lrow div{min-width:0;display:flex;flex-direction:column}
+.lrow span{font-family:var(--mono);font-size:10.5px;color:var(--mist);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow select{width:auto;padding:5px 6px;font-size:11px;font-family:var(--body)}
+
+.wxnow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center;margin-bottom:12px}
+.wxnow .lab{font-family:var(--disp);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--mist);display:block}
+.wxnow b{font-family:var(--mono);font-size:17px;color:var(--brass)}
+.wxstrip{display:flex;gap:4px;overflow-x:auto;padding-bottom:6px}
+.wxh{flex:0 0 46px;text-align:center;background:var(--ink);border:1px solid var(--line);
+  border-radius:9px;padding:6px 2px}
+.wxh .hh{font-family:var(--mono);font-size:10px;color:var(--mist);display:block;margin-bottom:2px}
+.wxh b{font-family:var(--mono);font-size:14px;display:block;margin-top:2px}
+.wxh .g{font-family:var(--mono);font-size:10px;color:var(--mist)}
+
+#crono{font-family:var(--mono);font-size:34px;font-weight:600;text-align:center;
+  color:var(--brass);font-variant-numeric:tabular-nums}
+.sw{display:flex;align-items:center;justify-content:space-between;padding:7px 0;font-size:13px}
+.sw input{width:auto}
+
+/* ---------- editor de coordenadas ---------- */
+#editor{position:absolute;inset:auto 0 0 0;z-index:900;background:var(--ink);
+  border-top:1px solid var(--line);border-radius:16px 16px 0 0;
+  transform:translateY(102%);transition:transform .22s ease;
+  padding:14px 14px calc(14px + env(safe-area-inset-bottom))}
+#editor.on{transform:translateY(0)}
+#ed-read{font-family:var(--mono);font-size:14px;color:var(--brass);text-align:center;
+  margin:2px 0 12px;font-variant-numeric:tabular-nums}
+.edline{display:grid;grid-template-columns:26px 1fr 1fr 1fr 34px;gap:5px;align-items:center;
+  margin-bottom:9px}
+.edtag{font-family:var(--disp);font-size:11px;letter-spacing:.1em;color:var(--mist)}
+.wheel{height:108px;overflow-y:scroll;scroll-snap-type:y mandatory;
+  background:var(--deck);border:1px solid var(--line);border-radius:10px;
+  scrollbar-width:none;position:relative}
+.wheel::-webkit-scrollbar{display:none}
+.wpad{height:36px}
+.witem{height:36px;line-height:36px;text-align:center;scroll-snap-align:center;
+  font-family:var(--mono);font-size:16px;color:var(--mist)}
+.witem.sel{color:var(--brass);font-weight:600;font-size:19px}
+.hemi{height:44px;border:1px solid var(--line);border-radius:10px;background:var(--deck2);
+  font-family:var(--disp);font-size:17px;font-weight:700;color:var(--brass)}
+.edunits{display:grid;grid-template-columns:26px 1fr 1fr 1fr 34px;gap:5px;margin-bottom:3px}
+.edunits span{font-family:var(--disp);font-size:9px;letter-spacing:.1em;color:var(--mist);
+  text-transform:uppercase;text-align:center}
+.edfine{display:flex;gap:5px;justify-content:center;margin:2px 0 10px}
+.edfine button{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px;
+  font-family:var(--mono);font-size:12px;color:var(--mist);background:var(--deck)}
+
+/* ---------- mando del simulador ---------- */
+#simctl{position:absolute;left:10px;right:10px;z-index:650;display:none;
+  bottom:calc(146px + env(safe-area-inset-bottom));
+  background:rgba(13,41,52,.96);border:1px solid var(--line);border-radius:12px;
+  padding:9px 11px;backdrop-filter:blur(6px)}
+#simctl.on{display:block}
+#simctl.min .simbody{display:none}
+.simhead{display:flex;justify-content:space-between;align-items:center;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-size:10px;color:var(--mist)}
+.simline{display:flex;align-items:center;gap:5px;margin-top:7px}
+.simline .n{font-family:var(--mono);font-size:15px;color:var(--brass);min-width:52px;
+  text-align:center;font-variant-numeric:tabular-nums}
+.simline .t{font-family:var(--disp);font-size:10px;letter-spacing:.1em;color:var(--mist);
+  text-transform:uppercase;width:46px}
+.simline button{flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 2px;
+  background:var(--deck2);font-family:var(--mono);font-size:12px;min-height:34px}
+.simline button.tk{background:var(--brass);color:#12212A;border-color:var(--brass);
+  font-family:var(--disp);font-weight:700;letter-spacing:.08em}
+
+.bar{height:5px;background:var(--ink);border:1px solid var(--line);border-radius:99px;
+  overflow:hidden;margin:10px 0 6px}
+.bar>div{height:100%;width:0%;background:var(--brass);transition:width .2s}
+#tiles-prog{font-family:var(--mono);font-size:11px;color:var(--mist);text-align:center}
+
+/* ---------- tabs ---------- */
+#tabs{position:absolute;bottom:0;left:0;right:0;z-index:800;
+  display:grid;grid-template-columns:repeat(5,1fr);
+  background:rgba(6,22,30,.97);border-top:1px solid var(--line);
+  padding:6px 2px calc(6px + env(safe-area-inset-bottom));backdrop-filter:blur(8px)}
+#tabs button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 0;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:10px;
+  color:var(--mist);border-radius:9px}
+#tabs button.on{color:var(--brass)}
+#tabs svg{width:20px;height:20px}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="hud">
+  <div class="hudgrid">
+    <div class="cell"><span class="lab">Rumbo</span><span class="val" id="hud-hdg">---</span></div>
+    <div class="cell"><span class="lab">Vel. kn</span><span class="val" id="hud-sog">—</span></div>
+    <div class="cell wind">
+      <div id="windwrap">
+        <svg id="wind-arrow" width="26" height="26" viewBox="0 0 26 26" style="transform-origin:50% 50%">
+          <path d="M13 2 L13 22 M13 22 L9 17 M13 22 L17 17" stroke="#E8B04B" stroke-width="2.2"
+            fill="none" stroke-linecap="round"/></svg>
+      </div>
+      <span class="lab">Viento</span><span class="val" id="hud-twd">---°</span>
+    </div>
+    <div class="cell wind"><span class="lab">Int. kn</span><span class="val" id="hud-tws">—</span></div>
+    <div class="cell"><span class="lab">TWA</span><span class="val" id="hud-twa">---</span></div>
+  </div>
+  <div id="hud-src">manual</div>
+  <div id="chips">
+    <span class="chip" data-ok="0">GPS <b id="st-gps">apagado</b></span>
+    <span class="chip" data-ok="0">HDG <b id="st-hdg">—</b></span>
+    <span class="chip" data-ok="0">MQTT <b id="st-mqtt">desconectado</b></span>
+    <span class="chip" data-ok="0">Meteo <b id="st-wx">—</b></span>
+    <span class="chip" data-ok="0">Red <b id="st-off">—</b></span>
+  </div>
+</div>
+
+<div id="tools">
+  <button id="btn-gps" title="Activar GPS y brújula">GPS</button>
+  <button id="btn-follow" class="on" title="Centrar en el barco">Seguir</button>
+  <button id="btn-fit" title="Ver todo el recorrido">Todo</button>
+  <button id="btn-tap" title="Añadir boya tocando el mapa">+Boya</button>
+</div>
+
+<div id="banner"><div class="bn-t">Plóter listo</div><div class="bn-s">Activa el GPS y añade las boyas.</div></div>
+
+<div id="simctl">
+  <div class="simhead"><span>Timón del simulador</span><button id="sim-hide">plegar</button></div>
+  <div class="simbody">
+    <div class="simline">
+      <span class="t">Rumbo</span>
+      <button data-helm="-10">−10</button><button data-helm="-1">−1</button>
+      <span class="n" id="sim-hdg">---°</span>
+      <button data-helm="1">+1</button><button data-helm="10">+10</button>
+      <button class="tk" id="sim-tack">Virar</button>
+    </div>
+    <div class="simline">
+      <span class="t">Vel.</span>
+      <button data-spd="-0.5">−</button><span class="n" id="sim-sog">—</span><button data-spd="0.5">+</button>
+      <span class="t">Viento</span>
+      <button data-wdir="-5">−5°</button><span class="n" id="sim-twd">---°</span><button data-wdir="5">+5°</button>
+      <button data-wspd="-1">−</button><span class="n" id="sim-tws">—</span><button data-wspd="1">+</button>
+    </div>
+  </div>
+</div>
+
+<div id="editor">
+  <div class="edunits"><span></span><span>Grados</span><span>Minutos</span><span>Milésimas</span><span></span></div>
+  <div class="edline">
+    <span class="edtag">LAT</span>
+    <div class="wheel" id="w-latd"></div><div class="wheel" id="w-latm"></div><div class="wheel" id="w-latt"></div>
+    <button class="hemi" id="ed-hemlat">N</button>
+  </div>
+  <div class="edline">
+    <span class="edtag">LON</span>
+    <div class="wheel" id="w-lond"></div><div class="wheel" id="w-lonm"></div><div class="wheel" id="w-lont"></div>
+    <button class="hemi" id="ed-hemlon">O</button>
+  </div>
+  <div class="edfine">
+    <button data-nudge="lat:-1">lat −0.001′</button><button data-nudge="lat:1">lat +0.001′</button>
+    <button data-nudge="lon:-1">lon −0.001′</button><button data-nudge="lon:1">lon +0.001′</button>
+  </div>
+  <div id="ed-read">—</div>
+  <div class="g2">
+    <div><label class="f" for="ed-name">Nombre</label><input id="ed-name"></div>
+    <div><label class="f" for="ed-role">Función</label><select id="ed-role"></select></div>
+  </div>
+  <div class="g2" style="margin-top:10px">
+    <button class="btn p" id="ed-done">Hecho</button>
+    <button class="btn" id="ed-cancel">Cerrar sin renombrar</button>
+  </div>
+</div>
+
+<div id="sheet">
+  <div id="sheet-head">
+    <span id="sheet-title">Panel</span>
+    <button id="sheet-close">✕</button>
+  </div>
+
+  <!-- MARCAS -->
+  <div class="panel" id="p-marcas">
+    <div class="blk">
+      <h4>Añadir boya</h4>
+      <label class="f" for="coord-in">Coordenadas</label>
+      <input id="coord-in" placeholder="43 21.456 N 008 24.123 O">
+      <div class="g2" style="margin-top:9px">
+        <button class="btn p" id="btn-paste">Añadir coordenadas</button>
+        <button class="btn" id="btn-here">Fondear aquí</button>
+      </div>
+      <p class="hint">También puedes tocar «+Boya» y marcar directamente sobre la carta, o arrastrar
+        cualquier boya para ajustarla. «Fondear aquí» usa tu posición: útil para pinguear los extremos
+        de la línea pasando por delante de cada uno.</p>
+    </div>
+    <div class="blk">
+      <h4>Recorrido</h4>
+      <div class="lista"></div>
+      <div class="g2" style="margin-top:11px">
+        <button class="btn" id="btn-export">Exportar</button>
+        <label class="btn" style="display:grid;place-items:center;margin:0">Importar
+          <input id="imp-file" type="file" accept="application/json" style="display:none"></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- TACTICA -->
+  <div class="panel" id="p-tactica">
+    <div class="blk">
+      <h4>Cronómetro de salida</h4>
+      <div id="crono">—:—</div>
+      <div class="g3" style="margin-top:10px">
+        <button class="btn p" id="btn-start">5 min</button>
+        <button class="btn" id="btn-sync">Sincronizar</button>
+        <button class="btn d" id="btn-reset">Anular</button>
+      </div>
+    </div>
+    <div class="blk">
+      <h4>Cálculos</h4>
+      <div class="rows"></div>
+    </div>
+    <div class="blk">
+      <h4>Ángulos del barco</h4>
+      <div class="g2">
+        <div><label class="f" for="up-ang">TWA de ceñida</label><input id="up-ang" type="number" inputmode="numeric"></div>
+        <div><label class="f" for="dn-ang">TWA de empopada</label><input id="dn-ang" type="number" inputmode="numeric"></div>
+      </div>
+      <p class="hint">Con estos dos ángulos se trazan las laylines y se elige el bordo largo.
+        Ajústalos a tu barco y al viento del día.</p>
+    </div>
+  </div>
+
+  <!-- VIENTO -->
+  <div class="panel" id="p-viento">
+    <div class="blk">
+      <h4>Previsión en el recorrido</h4>
+      <div class="wx"></div>
+      <button class="btn" id="btn-wx" style="margin-top:11px">Actualizar</button>
+    </div>
+    <div class="blk">
+      <h4>Viento manual</h4>
+      <div class="g2">
+        <div><label class="f" for="man-twd">Dirección °</label><input id="man-twd" type="number" inputmode="numeric"></div>
+        <div><label class="f" for="man-tws">Intensidad kn</label><input id="man-tws" type="number" inputmode="numeric"></div>
+      </div>
+      <p class="hint">Se usa solo si no hay sensor ni previsión. Prioridad: TWD del sensor →
+        cálculo desde la veleta → previsión → manual.</p>
+    </div>
+  </div>
+
+  <!-- MQTT -->
+  <div class="panel" id="p-mqtt">
+    <div class="blk">
+      <h4>Broker</h4>
+      <label class="f" for="mq-url">URL WebSocket</label>
+      <input id="mq-url" placeholder="wss://broker.local:8081/mqtt">
+      <div class="g2" style="margin-top:9px">
+        <div><label class="f" for="mq-user">Usuario</label><input id="mq-user"></div>
+        <div><label class="f" for="mq-pass">Contraseña</label><input id="mq-pass" type="password"></div>
+      </div>
+      <div style="margin-top:9px"><label class="f" for="mq-sniff">Filtro de escucha</label><input id="mq-sniff" placeholder="#"></div>
+      <div class="g2" style="margin-top:11px">
+        <button class="btn p" id="btn-mqtt-con">Conectar</button>
+        <button class="btn d" id="btn-mqtt-dis">Desconectar</button>
+      </div>
+      <p class="hint">Tiene que ser MQTT sobre WebSocket (ws:// o wss://). Un broker TCP normal
+        en el 1883 no vale desde el navegador: activa el listener WebSocket en Mosquitto.</p>
+    </div>
+    <div class="blk">
+      <h4>Mensajes recibidos</h4>
+      <div class="log"></div>
+    </div>
+    <div class="blk">
+      <h4>Asignación de datos</h4>
+      <div class="mapeo"></div>
+      <p class="hint">Clave JSON para payloads tipo <code>{"wind":{"aws":14.2}}</code> → <code>wind.aws</code>.
+        El multiplicador convierte unidades: m/s a nudos es 1.944.</p>
+    </div>
+  </div>
+
+  <!-- AJUSTES -->
+  <div class="panel" id="p-ajustes">
+    <div class="blk">
+      <h4>Carta</h4>
+      <label class="f" for="basemap">Base</label>
+      <select id="basemap">
+        <option value="nautica">Náutica clara</option>
+        <option value="oscuro">Oscura de noche</option>
+      </select>
+      <div class="sw" style="margin-top:9px">
+        <span>Superponer balizamiento OpenSeaMap</span>
+        <input type="checkbox" id="seamark">
+      </div>
+    </div>
+    <div class="blk">
+      <h4>Rumbo del barco</h4>
+      <label class="f" for="hdg-src">Fuente</label>
+      <select id="hdg-src">
+        <option value="auto">Automática (sensor → brújula → COG)</option>
+        <option value="brujula">Solo brújula del móvil</option>
+        <option value="cog">Solo rumbo sobre el fondo (GPS)</option>
+        <option value="mqtt">Solo compás por MQTT</option>
+      </select>
+      <div style="margin-top:9px"><label class="f" for="decl">Declinación magnética (E positiva)</label>
+        <input id="decl" type="number" step="0.1" inputmode="decimal"></div>
+      <p class="hint">La brújula del móvil da norte magnético y se desvía con los hierros del barco
+        y con el propio móvil en el soporte. Navegando por encima de 1,5 nudos el COG suele ser más
+        fiable; parado, es la brújula la única que sirve.</p>
+    </div>
+    <div class="blk">
+      <h4>Simulador</h4>
+      <div class="sw">
+        <span>Navegación simulada</span>
+        <input type="checkbox" id="sim">
+      </div>
+      <div class="sw">
+        <span>Roles de viento automáticos ±10°</span>
+        <input type="checkbox" id="sim-roles" checked>
+      </div>
+      <p class="hint">Aparece un timón sobre la carta: gobiernas rumbo y velocidad, viras y mueves
+        el viento a mano. El barco genera además viento aparente falso, así que se ejercita el mismo
+        cálculo que con la veleta real conectada.</p>
+    </div>
+    <div class="blk">
+      <h4>Cartas sin conexión</h4>
+      <div class="g2">
+        <div><label class="f" for="z-min">Zoom mínimo</label>
+          <select id="z-min"><option>11</option><option selected>12</option><option>13</option></select></div>
+        <div><label class="f" for="z-max">Zoom máximo</label>
+          <select id="z-max"><option>14</option><option selected>15</option><option>16</option></select></div>
+      </div>
+      <div class="row" style="margin-top:9px"><span>Se descargarán</span><b id="tiles-est">—</b></div>
+      <div class="row"><span>Guardado</span><b id="tiles-count">—</b></div>
+      <div class="row"><span>Espacio</span><b id="tiles-size">—</b></div>
+      <div class="bar"><div id="tiles-bar"></div></div>
+      <div id="tiles-prog">—</div>
+      <div class="g2" style="margin-top:10px">
+        <button class="btn p" id="btn-tiles">Descargar esta zona</button>
+        <button class="btn d" id="btn-tiles-del">Borrar cartas</button>
+      </div>
+      <p class="hint">Cubre el área de tus boyas más dos millas de margen. Hazlo en el puerto con
+        wifi: en el agua la carta saldrá de aquí. Sube el zoom máximo solo si vas a necesitar
+        mucho detalle, porque cada nivel multiplica por cuatro el número de mosaicos, y los
+        servidores de OpenStreetMap son gratuitos y de uso comedido.</p>
+    </div>
+    <div class="blk">
+      <h4>Diagnóstico</h4>
+      <div class="diag"></div>
+      <button class="btn" id="btn-diag" style="margin-top:10px">Volver a comprobar</button>
+      <p class="hint">Sirve este archivo por HTTPS (GitHub Pages, Netlify o el servidor del barco) y
+        añádelo a la pantalla de inicio. En <code>file://</code> el navegador bloquea GPS y brújula
+        sin avisar.</p>
+    </div>
+  </div>
+</div>
+
+<nav id="tabs">
+  <button data-p="marcas"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-5.6 7-11a7 7 0 10-14 0c0 5.4 7 11 7 11z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.4" fill="currentColor"/></svg>Boyas</button>
+  <button data-p="tactica"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor"/></svg>Táctica</button>
+  <button data-p="viento"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8h11a3 3 0 10-3-3M3 13h15a3 3 0 11-3 3M3 18h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Viento</button>
+  <button data-p="mqtt"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20a16 16 0 0116-16M4 20a10 10 0 0110-10M4 20a4 4 0 014-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Sensores</button>
+  <button data-p="ajustes"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Ajustes</button>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* =====================================================================
+   PLÓTER DE REGATA — núcleo
+   ===================================================================== */
+
+const NM = 1852;
+const KN = 1.94384;                       // m/s -> nudos
+const R_EARTH = 6371000;
+
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const rad = (d) => (d * Math.PI) / 180;
+const deg = (r) => (r * 180) / Math.PI;
+const n360 = (d) => ((d % 360) + 360) % 360;
+const n180 = (d) => { const x = n360(d); return x > 180 ? x - 360 : x; };
+const pad2 = (n) => String(n).padStart(2, "0");
+const pad3 = (n) => String(Math.round(n360(n))).padStart(3, "0");
+const uid = () => Math.random().toString(36).slice(2, 9);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ---------- geodesia ---------- */
+function distM(a, b) {
+  const p1 = rad(a.lat), p2 = rad(b.lat);
+  const dp = rad(b.lat - a.lat), dl = rad(b.lon - a.lon);
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R_EARTH * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function bearing(a, b) {
+  const p1 = rad(a.lat), p2 = rad(b.lat), dl = rad(b.lon - a.lon);
+  const y = Math.sin(dl) * Math.cos(p2);
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  return n360(deg(Math.atan2(y, x)));
+}
+function destino(p, brg, d) {
+  const dr = d / R_EARTH, b = rad(brg), p1 = rad(p.lat), l1 = rad(p.lon);
+  const p2 = Math.asin(Math.sin(p1) * Math.cos(dr) + Math.cos(p1) * Math.sin(dr) * Math.cos(b));
+  const l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(dr) * Math.cos(p1),
+                             Math.cos(dr) - Math.sin(p1) * Math.sin(p2));
+  return { lat: deg(p2), lon: ((deg(l2) + 540) % 360) - 180 };
+}
+
+/* ---------- coordenadas ---------- */
+function fmtLat(v) {
+  const h = v >= 0 ? "N" : "S", a = Math.abs(v), d = Math.floor(a);
+  return `${pad2(d)}° ${((a - d) * 60).toFixed(3).padStart(6, "0")}' ${h}`;
+}
+function fmtLon(v) {
+  const h = v >= 0 ? "E" : "O", a = Math.abs(v), d = Math.floor(a);
+  return `${String(d).padStart(3, "0")}° ${((a - d) * 60).toFixed(3).padStart(6, "0")}' ${h}`;
+}
+/* acepta: "43.357,-8.402" · "43 21.456 N 008 24.123 O" · 43°21'27"N 8°24'07"W */
+function parseCoords(txt) {
+  if (!txt) return null;
+  const s = txt.trim().toUpperCase().replace(/,/g, " ").replace(/[°'"´’]/g, " ");
+  const toks = s.match(/-?\d+(?:\.\d+)?|[NSEWO]/g);
+  if (!toks) return null;
+  const grupos = [];
+  let cur = [];
+  for (const t of toks) {
+    if (/[NSEWO]/.test(t)) { cur.push(t); grupos.push(cur); cur = []; }
+    else cur.push(t);
+  }
+  if (cur.length) grupos.push(cur);
+
+  /* sin letras de hemisferio: reparte los números en dos mitades */
+  if (grupos.length === 1) {
+    const n = grupos[0].length;
+    if (n === 2 || n === 4 || n === 6) grupos.splice(0, 1, grupos[0].slice(0, n / 2), grupos[0].slice(n / 2));
+    else return null;
+  }
+
+  const val = (g) => {
+    const nums = g.filter((x) => !/[NSEWO]/.test(x)).map(Number);
+    const hemi = g.find((x) => /[NSEWO]/.test(x));
+    if (!nums.length) return null;
+    let v = Math.abs(nums[0]) + (nums[1] || 0) / 60 + (nums[2] || 0) / 3600;
+    if (nums[0] < 0) v = -v;
+    if (hemi === "S" || hemi === "W" || hemi === "O") v = -Math.abs(v);
+    if (hemi === "N" || hemi === "E") v = Math.abs(v);
+    return { v, hemi };
+  };
+  const a = val(grupos[0]), b = grupos[1] ? val(grupos[1]) : null;
+  if (!a || !b) return null;
+  let lat = a.v, lon = b.v;
+  if (a.hemi === "E" || a.hemi === "W" || a.hemi === "O") { lat = b.v; lon = a.v; }
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return { lat, lon };
+}
+
+/* =====================================================================
+   Estado
+   ===================================================================== */
+
+const ROLES = {
+  comite:  { label: "Barco comité", color: "#E8B04B" },
+  boya:    { label: "Boya de salida", color: "#E8B04B" },
+  barlo:   { label: "Barlovento", color: "#3FCB7D" },
+  sota:    { label: "Sotavento", color: "#4FA8E8" },
+  paso:    { label: "Paso", color: "#EAF2F4" },
+  llegada: { label: "Llegada", color: "#E24B4B" },
+};
+
+const S = {
+  marks: [],
+  activeIdx: 0,
+  autoAdvance: true,
+  arrivalRadius: 40,          // m
+  upAngle: 42,                // TWA de ceñida
+  downAngle: 150,             // TWA de empopada
+  basemap: "nautica",
+  seamark: true,
+  followBoat: true,
+  northUp: true,
+
+  fix: null,                  // {lat,lon,acc,sog,cog,ts}
+  hdgDev: null,               // brújula del móvil
+  hdgSource: "auto",          // auto | brujula | cog | mqtt
+  decl: 0,                    // declinación magnética (E +)
+  gpsErr: null,
+  hdgUsada: "—",
+  sensors: {},                // datos MQTT crudos
+  wx: null,                   // previsión
+  wxAt: 0,
+  manualTwd: 250, manualTws: 12,
+  windSource: "manual",
+
+  mqtt: {
+    url: "wss://test.mosquitto.org:8081/mqtt", user: "", pass: "",
+    sniff: "#", connected: false,
+    map: {
+      hdg: { topic: "", json: "", k: 1 }, sog: { topic: "", json: "", k: 1 },
+      cog: { topic: "", json: "", k: 1 }, stw: { topic: "", json: "", k: 1 },
+      awa: { topic: "", json: "", k: 1 }, aws: { topic: "", json: "", k: 1 },
+      twd: { topic: "", json: "", k: 1 }, tws: { topic: "", json: "", k: 1 },
+      dpt: { topic: "", json: "", k: 1 },
+    },
+  },
+  log: [],
+  sim: false,
+};
+
+const FIELDS = {
+  hdg: "Rumbo de aguja (°)", sog: "Velocidad sobre fondo (kn)", cog: "Rumbo sobre fondo (°)",
+  stw: "Velocidad en el agua (kn)", awa: "Ángulo viento aparente (°, + estribor)",
+  aws: "Viento aparente (kn)", twd: "Dirección viento real (°)", tws: "Viento real (kn)",
+  dpt: "Sonda (m)",
+};
+
+const SKEY = "plotter-regata-v1";
+function guardar() {
+  try {
+    localStorage.setItem(SKEY, JSON.stringify({
+      marks: S.marks, activeIdx: S.activeIdx, upAngle: S.upAngle, downAngle: S.downAngle,
+      basemap: S.basemap, seamark: S.seamark, mqtt: { ...S.mqtt, connected: false },
+      manualTwd: S.manualTwd, manualTws: S.manualTws, arrivalRadius: S.arrivalRadius,
+      autoAdvance: S.autoAdvance, northUp: S.northUp,
+      hdgSource: S.hdgSource, decl: S.decl,
+    }));
+  } catch (e) {}
+}
+function cargar() {
+  try {
+    const raw = localStorage.getItem(SKEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    Object.assign(S, d, { mqtt: { ...S.mqtt, ...(d.mqtt || {}), connected: false } });
+    S.mqtt.map = { ...S.mqtt.map, ...((d.mqtt || {}).map || {}) };
+  } catch (e) {}
+}
+
+/* =====================================================================
+   Viento: fuente y viento real calculado
+   ===================================================================== */
+
+function vientoReal() {
+  const s = S.sensors;
+  if (s.twd != null && s.tws != null)
+    return { twd: n360(s.twd), tws: s.tws, src: "Sensor TWD" };
+
+  if (s.awa != null && s.aws != null) {
+    const hdg = rumbo();
+    const spd = s.stw != null ? s.stw : (s.sog != null ? s.sog : (S.fix?.sog ?? 0));
+    if (hdg != null) {
+      const a = rad(s.awa);
+      const tws = Math.sqrt(s.aws ** 2 + spd ** 2 - 2 * s.aws * spd * Math.cos(a));
+      const twa = deg(Math.atan2(s.aws * Math.sin(a), s.aws * Math.cos(a) - spd));
+      return { twd: n360(hdg + twa), tws, src: "Veleta (calculado)" };
+    }
+  }
+  if (S.wx?.now) return { twd: S.wx.now.dir, tws: S.wx.now.spd, src: "Previsión" };
+  return { twd: n360(S.manualTwd), tws: S.manualTws, src: "Manual" };
+}
+
+function rumbo() {
+  const brujula = S.hdgDev != null ? n360(S.hdgDev + S.decl) : null;
+  const cog = (S.fix?.cog != null && (S.fix.sog ?? 0) > 0.5) ? n360(S.fix.cog) : null;
+  const mq = S.sensors.hdg != null ? n360(S.sensors.hdg + S.decl) : null;
+
+  const elegir = (v, etiqueta) => { if (v != null) { S.hdgUsada = etiqueta; return v; } return null; };
+  let r = null;
+  if (S.hdgSource === "mqtt") r = elegir(mq, "sensor");
+  else if (S.hdgSource === "brujula") r = elegir(brujula, "brújula");
+  else if (S.hdgSource === "cog") r = elegir(cog, "COG");
+  else r = elegir(mq, "sensor") ?? elegir(brujula, "brújula") ?? elegir(cog, "COG");
+  if (r == null) S.hdgUsada = "—";
+  return r;
+}
+
+/* =====================================================================
+   Táctica
+   ===================================================================== */
+
+function marcaActiva() { return S.marks[S.activeIdx] || null; }
+
+function tactica() {
+  const m = marcaActiva(), fix = S.fix;
+  const w = vientoReal();
+  if (!m || !fix) return { w };
+
+  const d = distM(fix, m);
+  const brg = bearing(fix, m);
+  const twaMark = n180(brg - w.twd);          // 0 = marca justo a barlovento
+  const hdg = rumbo();
+  const sog = S.fix.sog ?? S.sensors.sog ?? 0;
+
+  const out = { w, dist: d, brg, twaMark, hdg, sog, mark: m };
+  out.eta = sog > 0.2 ? (d / NM) / sog * 3600 : null;
+
+  if (Math.abs(twaMark) < S.upAngle) {
+    out.tipo = "cenida";
+    out.stbd = n360(w.twd - S.upAngle);       // amura de estribor
+    out.port = n360(w.twd + S.upAngle);
+    /* bordo largo: el que apunta más cerca de la marca */
+    out.largo = Math.abs(n180(out.stbd - brg)) < Math.abs(n180(out.port - brg)) ? "estribor" : "babor";
+    out.gradosLayStbd = Math.abs(twaMark + S.upAngle);
+    out.gradosLayPort = Math.abs(twaMark - S.upAngle);
+    if (hdg != null) {
+      out.amura = n180(hdg - w.twd) < 0 ? "estribor" : "babor";
+      out.distLay = distLayline(fix, m, hdg, w.twd, S.upAngle);
+    }
+  } else if (Math.abs(twaMark) > S.downAngle) {
+    out.tipo = "popa";
+    out.stbd = n360(w.twd - S.downAngle);
+    out.port = n360(w.twd + S.downAngle);
+    out.largo = Math.abs(n180(out.stbd - brg)) < Math.abs(n180(out.port - brg)) ? "estribor" : "babor";
+    if (hdg != null) {
+      out.amura = n180(hdg - w.twd) < 0 ? "estribor" : "babor";
+      out.distLay = distLayline(fix, m, hdg, w.twd, S.downAngle);
+    }
+  } else {
+    out.tipo = "directo";
+    out.rumboRec = brg;
+    out.twaRec = twaMark;
+  }
+  return out;
+}
+
+/* distancia navegando al rumbo actual hasta cortar una layline (m) */
+function distLayline(fix, mark, hdg, twd, ang) {
+  const d = distM(fix, mark), brg = bearing(fix, mark);
+  const beta = Math.abs(n180(brg - hdg));
+  const objetivo = n180(hdg - twd) < 0 ? -ang : ang;   // layline de tu amura opuesta
+  const gamma = Math.abs(n180(brg - twd - objetivo));
+  const den = Math.sin(rad(beta + gamma));
+  if (Math.abs(den) < 1e-6 || beta + gamma >= 180) return null;
+  const t = (d * Math.sin(rad(gamma))) / den;
+  return t > 0 && t < d * 6 ? t : null;
+}
+
+/* línea de salida a partir de las marcas comité + boya */
+function lineaSalida() {
+  const c = S.marks.find((m) => m.role === "comite");
+  const b = S.marks.find((m) => m.role === "boya");
+  if (!c || !b) return null;
+  const w = vientoReal();
+  const brgPC = bearing(b, c);
+  const len = distM(b, c);
+  const delta = n180(brgPC - w.twd - 90);
+  const fav = Math.abs(delta) < 1.5 ? "igual" : delta > 0 ? "boya" : "comite";
+  const out = { c, b, brgPC, len, delta, fav, ventaja: Math.abs(len * Math.sin(rad(delta))) };
+  if (S.fix) {
+    /* distancia perpendicular a la línea, negativa si ya estás pasado */
+    const dB = distM(S.fix, b), brgB = bearing(b, S.fix);
+    out.dLinea = dB * Math.sin(rad(n180(brgB - brgPC)));
+    const sog = S.fix.sog ?? 0;
+    out.tLinea = sog > 0.2 ? Math.abs(out.dLinea) / (sog / KN * 1000 / 1000) / 1 : null;
+    if (sog > 0.2) out.tLinea = Math.abs(out.dLinea) / (sog * NM / 3600);
+  }
+  return out;
+}
+
+/* =====================================================================
+   Mapa
+   ===================================================================== */
+
+let map, capaBase, capaSeamark;
+let boatMarker, cogLine, courseLine, layStbd, layPort, startLine, wedge;
+const markLayers = new Map();
+
+const BASES = {
+  nautica: { url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attr: "© OpenStreetMap", max: 19 },
+  oscuro:  { url: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", attr: "© OpenStreetMap © CARTO", max: 20 },
+};
+
+function initMapa() {
+  map = L.map("map", { zoomControl: false, attributionControl: true })
+    .setView([43.37, -8.4], 13);
+  L.control.zoom({ position: "topright" }).addTo(map);
+  ponerBase();
+
+  courseLine = L.polyline([], { color: "#EAF2F4", weight: 1.5, dashArray: "6 6", opacity: .7 }).addTo(map);
+  layStbd = L.polyline([], { color: "#3FCB7D", weight: 2.5, opacity: .9 }).addTo(map);
+  layPort = L.polyline([], { color: "#E24B4B", weight: 2.5, opacity: .9 }).addTo(map);
+  startLine = L.polyline([], { color: "#E8B04B", weight: 3, dashArray: "10 6" }).addTo(map);
+  cogLine = L.polyline([], { color: "#4FA8E8", weight: 2 }).addTo(map);
+
+  map.on("click", (e) => {
+    if (!modoAnadir) return;
+    anadirMarca({ lat: e.latlng.lat, lon: e.latlng.lng }, true);
+    modoAnadir = false;
+    $("#btn-tap").classList.remove("on");
+    map.getContainer().style.cursor = "";
+  });
+  map.on("dragstart", () => { S.followBoat = false; $("#btn-follow").classList.remove("on"); });
+}
+
+function ponerBase() {
+  if (capaBase) map.removeLayer(capaBase);
+  const b = BASES[S.basemap];
+  capaBase = L.tileLayer(b.url, { attribution: b.attr, maxZoom: b.max }).addTo(map);
+  if (capaSeamark) { map.removeLayer(capaSeamark); capaSeamark = null; }
+  if (S.seamark) {
+    capaSeamark = L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
+      { attribution: "© OpenSeaMap", maxZoom: 18, opacity: .95 }).addTo(map);
+  }
+  capaBase.bringToBack();
+}
+
+function iconoMarca(m, i) {
+  const c = ROLES[m.role]?.color || "#EAF2F4";
+  const act = i === S.activeIdx;
+  return L.divIcon({
+    className: "",
+    html: `<div class="mk ${act ? "act" : ""}" style="--c:${c}">
+             <span class="mk-n">${i + 1}</span><span class="mk-l">${m.name}</span></div>`,
+    iconSize: [0, 0], iconAnchor: [0, 0],
+  });
+}
+
+function pintarMarcas() {
+  markLayers.forEach((l) => map.removeLayer(l));
+  markLayers.clear();
+  S.marks.forEach((m, i) => {
+    const lay = L.marker([m.lat, m.lon], { icon: iconoMarca(m, i), draggable: true }).addTo(map);
+    lay.on("dragend", (e) => {
+      const p = e.target.getLatLng();
+      m.lat = p.lat; m.lon = p.lng; guardar(); render();
+    });
+    lay.on("click", () => {
+      if (S.activeIdx === i) { abrirEditor(m.id); return; }
+      S.activeIdx = i; guardar(); pintarMarcas(); pintarPanelMarcas(); render();
+    });
+    markLayers.set(m.id, lay);
+  });
+  courseLine.setLatLngs(S.marks.map((m) => [m.lat, m.lon]));
+}
+
+function pintarBarco() {
+  if (!S.fix) return;
+  const ll = [S.fix.lat, S.fix.lon];
+  const h = rumbo() ?? S.fix.cog ?? 0;
+  const html = `<div class="boat" style="transform:rotate(${h}deg)">
+      <svg width="34" height="46" viewBox="0 0 34 46">
+        <path d="M17 1 L29 32 L17 26 L5 32 Z" fill="#E8B04B" stroke="#06161E" stroke-width="2"/>
+      </svg></div>`;
+  const icon = L.divIcon({ className: "", html, iconSize: [34, 46], iconAnchor: [17, 23] });
+  if (!boatMarker) boatMarker = L.marker(ll, { icon, zIndexOffset: 1000 }).addTo(map);
+  else { boatMarker.setLatLng(ll); boatMarker.setIcon(icon); }
+  if (S.followBoat) map.panTo(ll, { animate: true, duration: .4 });
+
+  const sog = S.fix.sog ?? 0;
+  if (S.fix.cog != null && sog > 0.3) {
+    const p = destino(S.fix, S.fix.cog, (sog * NM / 3600) * 360);   // vector 6 min
+    cogLine.setLatLngs([ll, [p.lat, p.lon]]);
+  } else cogLine.setLatLngs([]);
+}
+
+function pintarLaylines(t) {
+  if (!t?.mark || !S.fix || (t.tipo !== "cenida" && t.tipo !== "popa")) {
+    layStbd.setLatLngs([]); layPort.setLatLngs([]); return;
+  }
+  const m = t.mark, L1 = Math.max(distM(S.fix, m) * 1.6, 400);
+  const back = t.tipo === "cenida" ? 180 : 0;
+  const a = destino(m, n360(t.stbd + 180 + back), L1);
+  const b = destino(m, n360(t.port + 180 + back), L1);
+  layStbd.setLatLngs([[m.lat, m.lon], [a.lat, a.lon]]);
+  layPort.setLatLngs([[m.lat, m.lon], [b.lat, b.lon]]);
+}
+
+function pintarLinea(ls) {
+  if (!ls) { startLine.setLatLngs([]); return; }
+  startLine.setLatLngs([[ls.b.lat, ls.b.lon], [ls.c.lat, ls.c.lon]]);
+}
+
+/* =====================================================================
+   GPS y brújula
+   ===================================================================== */
+
+let watchId = null;
+
+function diagnostico() {
+  const d = [];
+  const seguro = window.isSecureContext;
+  d.push(["Origen", location.protocol + "//" + (location.hostname || "(archivo local)")]);
+  d.push(["Contexto seguro", seguro ? "sí" : "NO — el GPS está bloqueado", seguro ? "stbd" : "port"]);
+  d.push(["En un iframe", window.top !== window.self ? "sí — puede bloquear permisos" : "no"]);
+  d.push(["API de geolocalización", navigator.geolocation ? "disponible" : "ausente"]);
+  d.push(["Orientación del dispositivo", "DeviceOrientationEvent" in window ? "disponible" : "ausente"]);
+  d.push(["Permiso de ubicación", permisoGeo]);
+  if (S.gpsErr) d.push(["Último error", S.gpsErr, "port"]);
+  return d;
+}
+let permisoGeo = "sin consultar";
+
+async function revisarPermiso() {
+  try {
+    const p = await navigator.permissions.query({ name: "geolocation" });
+    permisoGeo = { granted: "concedido", denied: "DENEGADO", prompt: "pendiente de preguntar" }[p.state] || p.state;
+    p.onchange = () => { permisoGeo = p.state; if (panelActivo === "ajustes") pintarDiag(); };
+  } catch (e) { permisoGeo = "no consultable"; }
+  if (panelActivo === "ajustes") pintarDiag();
+}
+
+function iniciarGPS() {
+  revisarPermiso();
+  if (!window.isSecureContext) {
+    S.gpsErr = "Sin contexto seguro: sirve el archivo por https:// o localhost.";
+    estado("gps", "bloqueado", false);
+    alert("El navegador no da la ubicación en este contexto.\n\n" +
+      "Estás en " + location.protocol + " y hace falta https:// (o localhost).\n\n" +
+      "Mira Ajustes → Diagnóstico para el detalle.");
+    if (panelActivo === "ajustes") pintarDiag();
+    return;
+  }
+  if (!navigator.geolocation) { S.gpsErr = "API ausente"; estado("gps", "no disponible", false); return; }
+  estado("gps", "buscando…", false);
+  if (watchId != null) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(
+    (p) => {
+      S.fix = {
+        lat: p.coords.latitude, lon: p.coords.longitude,
+        acc: p.coords.accuracy,
+        sog: p.coords.speed != null ? p.coords.speed * KN : null,
+        cog: p.coords.heading != null && !isNaN(p.coords.heading) ? p.coords.heading : null,
+        ts: p.timestamp,
+      };
+      S.gpsErr = null;
+      estado("gps", `±${Math.round(p.coords.accuracy)} m`, true);
+      if (S.followBoat && !mapCentrado) { map.setView([S.fix.lat, S.fix.lon], 15); mapCentrado = true; }
+      render();
+    },
+    (e) => {
+      const m = {
+        1: "Permiso denegado. Ábrelo en los ajustes del navegador para este sitio.",
+        2: "El dispositivo no consigue posición. Sal a cubierta y espera unos segundos.",
+        3: "Tiempo agotado esperando el primer fix.",
+      };
+      S.gpsErr = m[e.code] || e.message || "error desconocido";
+      estado("gps", e.code === 1 ? "permiso denegado" : e.code === 3 ? "sin fix" : "sin señal", false);
+      if (panelActivo === "ajustes") pintarDiag();
+    },
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 }
+  );
+}
+let mapCentrado = false;
+
+async function iniciarBrujula() {
+  try {
+    if (typeof DeviceOrientationEvent?.requestPermission === "function") {
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== "granted") { estado("hdg", "denegada", false); return; }
+    }
+    const h = (e) => {
+      let v = null;
+      if (e.webkitCompassHeading != null) v = e.webkitCompassHeading;
+      else if (e.absolute && e.alpha != null) v = 360 - e.alpha;
+      if (v != null) { S.hdgDev = n360(v); estado("hdg", "brújula", true); }
+    };
+    window.addEventListener("deviceorientationabsolute", h, true);
+    window.addEventListener("deviceorientation", h, true);
+  } catch (e) { estado("hdg", "no disponible", false); }
+}
+
+/* =====================================================================
+   MQTT
+   ===================================================================== */
+
+let client = null;
+const CDN_MQTT = [
+  "https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.5/mqtt.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js",
+  "https://unpkg.com/mqtt/dist/mqtt.min.js",
+];
+function cargarScript(u) {
+  return new Promise((ok, ko) => {
+    const s = document.createElement("script");
+    s.src = u; s.onload = ok; s.onerror = ko; document.head.appendChild(s);
+  });
+}
+async function asegurarMqttLib() {
+  if (window.mqtt) return true;
+  for (const u of CDN_MQTT) {
+    try { await cargarScript(u); if (window.mqtt) return true; } catch (e) {}
+  }
+  return false;
+}
+
+async function conectarMqtt() {
+  if (client) { try { client.end(true); } catch (e) {} client = null; }
+  estado("mqtt", "cargando librería…", false);
+  if (!(await asegurarMqttLib())) { estado("mqtt", "no se pudo cargar mqtt.js", false); return; }
+  estado("mqtt", "conectando…", false);
+  try {
+    client = window.mqtt.connect(S.mqtt.url, {
+      username: S.mqtt.user || undefined,
+      password: S.mqtt.pass || undefined,
+      clientId: "plotter_" + uid(),
+      reconnectPeriod: 4000, connectTimeout: 8000, clean: true,
+    });
+  } catch (e) { estado("mqtt", "URL inválida", false); return; }
+
+  client.on("connect", () => {
+    S.mqtt.connected = true;
+    estado("mqtt", "conectado", true);
+    const temas = new Set();
+    if (S.mqtt.sniff) temas.add(S.mqtt.sniff);
+    Object.values(S.mqtt.map).forEach((m) => m.topic && temas.add(m.topic));
+    temas.forEach((t) => client.subscribe(t, { qos: 0 }));
+  });
+  client.on("reconnect", () => estado("mqtt", "reconectando…", false));
+  client.on("error", (e) => estado("mqtt", "error: " + (e?.message || e), false));
+  client.on("close", () => { S.mqtt.connected = false; estado("mqtt", "desconectado", false); });
+  client.on("message", (topic, buf) => {
+    const payload = buf.toString();
+    S.log.unshift({ topic, payload, ts: Date.now() });
+    if (S.log.length > 40) S.log.pop();
+    for (const [k, cfg] of Object.entries(S.mqtt.map)) {
+      if (!cfg.topic || !coincide(cfg.topic, topic)) continue;
+      const v = extraer(payload, cfg.json);
+      if (v != null && isFinite(v)) S.sensors[k] = v * (Number(cfg.k) || 1);
+    }
+    S.sensors._ts = Date.now();
+    if (panelActivo === "mqtt") pintarLog();
+    render();
+  });
+}
+function desconectarMqtt() {
+  if (client) { try { client.end(true); } catch (e) {} client = null; }
+  S.mqtt.connected = false; S.sensors = {}; estado("mqtt", "desconectado", false); render();
+}
+function coincide(filtro, topic) {
+  const f = filtro.split("/"), t = topic.split("/");
+  for (let i = 0; i < f.length; i++) {
+    if (f[i] === "#") return true;
+    if (f[i] === "+") continue;
+    if (f[i] !== t[i]) return false;
+  }
+  return f.length === t.length;
+}
+function extraer(payload, ruta) {
+  if (!ruta) { const v = parseFloat(payload); return isNaN(v) ? null : v; }
+  try {
+    let o = JSON.parse(payload);
+    for (const k of ruta.split(".")) { if (o == null) return null; o = o[k]; }
+    const v = parseFloat(o);
+    return isNaN(v) ? null : v;
+  } catch (e) { return null; }
+}
+
+/* =====================================================================
+   Previsión (Open-Meteo, sin clave)
+   ===================================================================== */
+
+function centroide() {
+  if (S.marks.length) {
+    return {
+      lat: S.marks.reduce((a, m) => a + m.lat, 0) / S.marks.length,
+      lon: S.marks.reduce((a, m) => a + m.lon, 0) / S.marks.length,
+    };
+  }
+  return S.fix ? { lat: S.fix.lat, lon: S.fix.lon } : null;
+}
+
+async function traerMeteo(force) {
+  const c = centroide();
+  if (!c) { estado("wx", "sin marcas", false); return; }
+  if (!force && Date.now() - S.wxAt < 10 * 60 * 1000) return;
+  estado("wx", "consultando…", false);
+  const u = "https://api.open-meteo.com/v1/forecast?latitude=" + c.lat.toFixed(4) +
+    "&longitude=" + c.lon.toFixed(4) +
+    "&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,pressure_msl,precipitation" +
+    "&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,pressure_msl" +
+    "&wind_speed_unit=kn&timezone=auto&forecast_days=2";
+  try {
+    const r = await fetch(u);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const idx = j.hourly.time.findIndex((t) => new Date(t).getTime() >= Date.now() - 3600e3);
+    const i0 = idx < 0 ? 0 : idx;
+    S.wx = {
+      lugar: c,
+      now: {
+        spd: j.current.wind_speed_10m, dir: j.current.wind_direction_10m,
+        gust: j.current.wind_gusts_10m, temp: j.current.temperature_2m,
+        pres: j.current.pressure_msl,
+      },
+      horas: j.hourly.time.slice(i0, i0 + 14).map((t, k) => ({
+        t, spd: j.hourly.wind_speed_10m[i0 + k], dir: j.hourly.wind_direction_10m[i0 + k],
+        gust: j.hourly.wind_gusts_10m[i0 + k], temp: j.hourly.temperature_2m[i0 + k],
+        pp: j.hourly.precipitation[i0 + k],
+      })),
+    };
+    S.wxAt = Date.now();
+    estado("wx", "actualizada", true);
+  } catch (e) {
+    estado("wx", "sin conexión", false);
+  }
+  render();
+}
+
+/* =====================================================================
+   Cronómetro de salida
+   ===================================================================== */
+
+const GATES = [
+  { t: 300, l: "Atención", n: "Bandera de clase izada" },
+  { t: 240, l: "Preparación", n: "Bandera P izada" },
+  { t: 60, l: "Último minuto", n: "P arriada" },
+  { t: 0, l: "Salida", n: "Clase arriada" },
+];
+let zero = null, fired = new Set(), audioCtx = null;
+function beep(f, d, v = .5) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const t = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = "square"; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .01);
+    g.gain.setValueAtTime(v, t + d - .05); g.gain.linearRampToValueAtTime(0, t + d);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + d + .02);
+  } catch (e) {}
+}
+function arrancarCrono(s) {
+  beep(880, .1, .3);
+  zero = Date.now() + s * 1000; fired = new Set();
+  navigator.wakeLock?.request("screen").catch(() => {});
+}
+function segRestantes() { return zero == null ? null : (zero - Date.now()) / 1000; }
+let ultSeg = null;
+function tickCrono() {
+  const l = segRestantes(); if (l == null) return;
+  GATES.forEach((g) => {
+    if (l <= g.t && l > g.t - .6 && !fired.has(g.t)) {
+      fired.add(g.t);
+      g.t === 60 ? beep(660, 1.6) : beep(g.t === 0 ? 1046 : 880, .8);
+      navigator.vibrate?.(g.t === 0 ? [120, 60, 400] : 250);
+    }
+  });
+  const s = Math.ceil(l);
+  if (s !== ultSeg) { ultSeg = s; if (s > 0 && s <= 10) beep(1320, .07, .25); }
+}
+
+/* =====================================================================
+   Simulador (para probar en tierra)
+   ===================================================================== */
+
+let sim = null, simTimer = null;
+
+function toggleSim(on) {
+  S.sim = on;
+  clearInterval(simTimer);
+  $("#simctl").classList.toggle("on", on);
+  if (!on) {
+    sim = null; S.fix = null; S.hdgDev = null;
+    delete S.sensors.aws; delete S.sensors.awa;
+    estado("gps", "apagado", false); render(); return;
+  }
+  const c = centroide() || { lat: 43.37, lon: -8.4 };
+  const inicio = destino(c, 180, 900);
+  sim = { lat: inicio.lat, lon: inicio.lon, hdg: 205, sog: 6.0, twd: 250, tws: 14, roles: true, t: 0 };
+  mapCentrado = false;
+  simTimer = setInterval(pasoSim, 1000);
+  pintarSim();
+}
+
+function pasoSim() {
+  if (!sim) return;
+  sim.t++;
+  const w = n360(sim.twd + (sim.roles ? 10 * Math.sin(sim.t / 45) : 0));
+  const p = destino({ lat: sim.lat, lon: sim.lon }, sim.hdg, (sim.sog * NM) / 3600);
+  sim.lat = p.lat; sim.lon = p.lon;
+
+  S.fix = { lat: p.lat, lon: p.lon, acc: 4, sog: sim.sog, cog: sim.hdg, ts: Date.now() };
+  S.hdgDev = sim.hdg;
+  estado("gps", "simulado", true);
+
+  /* aparente a partir del real: así se ejercita el mismo cálculo que con la veleta */
+  const twaRel = n180(w - sim.hdg);              // + = viento por estribor
+  const x = sim.tws * Math.cos(rad(twaRel)) + sim.sog;
+  const y = sim.tws * Math.sin(rad(twaRel));
+  S.sensors.aws = Math.hypot(x, y);
+  S.sensors.awa = deg(Math.atan2(y, x));
+  S.sensors._ts = Date.now();
+
+  if (!mapCentrado) { map.setView([p.lat, p.lon], 15); mapCentrado = true; }
+  render(); pintarSim();
+}
+
+function timonear(d) { if (sim) { sim.hdg = n360(sim.hdg + d); pasoSim(); } }
+function virarSim() {
+  if (!sim) return;
+  const twa = n180(sim.hdg - sim.twd);
+  sim.hdg = n360(sim.twd - twa);
+  pasoSim();
+}
+function pintarSim() {
+  if (!sim) return;
+  $("#sim-hdg").textContent = pad3(sim.hdg) + "°";
+  $("#sim-sog").textContent = sim.sog.toFixed(1);
+  $("#sim-twd").textContent = pad3(sim.twd) + "°";
+  $("#sim-tws").textContent = sim.tws.toFixed(0);
+}
+
+/* =====================================================================
+   Cartas sin conexión
+   ===================================================================== */
+
+const lon2x = (lon, z) => Math.floor(((lon + 180) / 360) * 2 ** z);
+const lat2y = (lat, z) => {
+  const r = rad(lat);
+  return Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z);
+};
+
+function areaRecorrido(margenM) {
+  const pts = S.marks.map((m) => ({ lat: m.lat, lon: m.lon }));
+  if (S.fix) pts.push({ lat: S.fix.lat, lon: S.fix.lon });
+  if (!pts.length) return null;
+  const lats = pts.map((p) => p.lat), lons = pts.map((p) => p.lon);
+  const dLat = margenM / 111320;
+  const dLon = margenM / (111320 * Math.cos(rad((Math.min(...lats) + Math.max(...lats)) / 2)) || 1);
+  return {
+    s: Math.min(...lats) - dLat, n: Math.max(...lats) + dLat,
+    o: Math.min(...lons) - dLon, e: Math.max(...lons) + dLon,
+  };
+}
+
+function listaMosaicos(zMin, zMax) {
+  const a = areaRecorrido(2 * NM);
+  if (!a) return [];
+  const urls = [];
+  const capas = [BASES[S.basemap].url];
+  if (S.seamark) capas.push("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png");
+
+  for (let z = zMin; z <= zMax; z++) {
+    const x0 = lon2x(a.o, z), x1 = lon2x(a.e, z);
+    const y0 = lat2y(a.n, z), y1 = lat2y(a.s, z);
+    for (let x = x0; x <= x1; x++) {
+      for (let y = y0; y <= y1; y++) {
+        for (const tpl of capas) {
+          if (/openseamap/.test(tpl) && z > 18) continue;
+          urls.push(tpl.replace("{z}", z).replace("{x}", x).replace("{y}", y).replace("{r}", ""));
+        }
+      }
+    }
+  }
+  return urls;
+}
+
+let bajando = false;
+async function descargarCartas(zMin, zMax) {
+  if (bajando) return;
+  const urls = listaMosaicos(zMin, zMax);
+  if (!urls.length) { alert("Añade primero las boyas del recorrido."); return; }
+  if (urls.length > 2500) {
+    alert(`Serían ${urls.length} mosaicos, demasiados.\n\nBaja el zoom máximo o acerca las boyas ` +
+      `entre sí. Los servidores de OpenStreetMap son gratuitos y conviene no abusar.`);
+    return;
+  }
+  if (!confirm(`Se van a descargar ${urls.length} mosaicos para navegar sin cobertura. ¿Seguimos?`)) return;
+
+  bajando = true;
+  const btn = $("#btn-tiles"); btn.disabled = true;
+  const cache = await caches.open("ploter-tiles");
+  let hechos = 0, fallos = 0;
+
+  const trabajador = async (cola) => {
+    while (cola.length) {
+      const u = cola.pop();
+      try {
+        const yaEsta = await cache.match(u, { ignoreVary: true });
+        if (!yaEsta) {
+          let r;
+          try { r = await fetch(u, { mode: "cors", credentials: "omit" }); }
+          catch (e) { r = await fetch(u, { mode: "no-cors" }); }
+          if (r.ok || r.type === "opaque") await cache.put(u, r.clone());
+          else fallos++;
+        }
+      } catch (e) { fallos++; }
+      hechos++;
+      if (hechos % 5 === 0 || hechos === urls.length) {
+        $("#tiles-prog").textContent = `${hechos} / ${urls.length}${fallos ? ` · ${fallos} fallidos` : ""}`;
+        $("#tiles-bar").style.width = ((hechos / urls.length) * 100).toFixed(1) + "%";
+      }
+      await new Promise((r) => setTimeout(r, 25));      // no atosigar al servidor
+    }
+  };
+  const cola = urls.slice();
+  await Promise.all([1, 2, 3].map(() => trabajador(cola)));
+
+  bajando = false; btn.disabled = false;
+  $("#tiles-prog").textContent = `Listo: ${hechos - fallos} mosaicos guardados`;
+  medirAlmacenamiento();
+}
+
+function estimarMosaicos() {
+  const n = listaMosaicos(+$("#z-min").value, +$("#z-max").value).length;
+  $("#tiles-est").textContent = n
+    ? `${n} mosaicos · unos ${Math.round(n * 18 / 1024 * 10) / 10} MB`
+    : "sin boyas todavía";
+}
+
+async function medirAlmacenamiento() {
+  try {
+    const e = await navigator.storage.estimate();
+    const mb = (e.usage / 1048576).toFixed(1), tot = (e.quota / 1048576 / 1024).toFixed(1);
+    $("#tiles-size").textContent = `${mb} MB usados de ~${tot} GB disponibles`;
+  } catch (err) { $("#tiles-size").textContent = "tamaño no consultable"; }
+  try {
+    const c = await caches.open("ploter-tiles");
+    const k = await c.keys();
+    $("#tiles-count").textContent = `${k.length} mosaicos en memoria`;
+  } catch (err) {}
+}
+
+async function borrarCartas() {
+  if (!confirm("¿Borrar todas las cartas descargadas?")) return;
+  await caches.delete("ploter-tiles");
+  $("#tiles-prog").textContent = "Cartas borradas";
+  $("#tiles-bar").style.width = "0%";
+  medirAlmacenamiento();
+}
+
+/* ---------- service worker ---------- */
+function registrarSW() {
+  if (!("serviceWorker" in navigator)) { estado("off", "sin soporte", false); return; }
+  navigator.serviceWorker.register("./sw.js").then((reg) => {
+    estado("off", "instalada", true);
+    reg.addEventListener("updatefound", () => {
+      const nuevo = reg.installing;
+      nuevo?.addEventListener("statechange", () => {
+        if (nuevo.state === "installed" && navigator.serviceWorker.controller) {
+          if (confirm("Hay una versión nueva de la app. ¿Recargar ahora?")) {
+            nuevo.postMessage("skipWaiting");
+            location.reload();
+          }
+        }
+      });
+    });
+  }).catch(() => estado("off", "no registrada", false));
+
+  const red = () => estado("off", navigator.onLine ? "en línea" : "SIN RED", navigator.onLine);
+  window.addEventListener("online", red); window.addEventListener("offline", red); red();
+
+  /* que el navegador no borre las cartas por falta de sitio */
+  navigator.storage?.persist?.().catch(() => {});
+}
+
+/* =====================================================================
+   Editor de coordenadas: ruletas de grados y minutos
+   ===================================================================== */
+
+const ITEM_H = 36;
+let editId = null, editVal = null, wheels = {};
+
+function crearRuleta(cont, desde, hasta, ancho, alCambiar) {
+  cont.innerHTML = `<div class="wpad"></div>` +
+    Array.from({ length: hasta - desde + 1 }, (_, i) =>
+      `<div class="witem">${String(desde + i).padStart(ancho, "0")}</div>`).join("") +
+    `<div class="wpad"></div>`;
+  let tmr = null;
+  cont.addEventListener("scroll", () => {
+    clearTimeout(tmr);
+    tmr = setTimeout(() => {
+      const i = Math.round(cont.scrollTop / ITEM_H);
+      const v = clamp(desde + i, desde, hasta);
+      marcarSeleccion(cont, i);
+      alCambiar(v);
+    }, 90);
+  }, { passive: true });
+  return {
+    set(v) {
+      const i = clamp(Math.round(v) - desde, 0, hasta - desde);
+      cont.scrollTop = i * ITEM_H;
+      marcarSeleccion(cont, i);
+    },
+  };
+}
+function marcarSeleccion(cont, i) {
+  cont.querySelectorAll(".witem").forEach((el, k) => el.classList.toggle("sel", k === i));
+}
+
+function abrirEditor(id) {
+  const m = S.marks.find((x) => x.id === id);
+  if (!m) return;
+  editId = id;
+  editVal = { lat: m.lat, lon: m.lon };
+  $("#ed-name").value = m.name;
+  $("#ed-role").innerHTML = Object.entries(ROLES)
+    .map(([k, v]) => `<option value="${k}" ${m.role === k ? "selected" : ""}>${v.label}</option>`).join("");
+  $("#editor").classList.add("on");
+
+  if (!wheels.latD) {
+    wheels.latD = crearRuleta($("#w-latd"), 0, 89, 2, (v) => setParte("lat", "d", v));
+    wheels.latM = crearRuleta($("#w-latm"), 0, 59, 2, (v) => setParte("lat", "m", v));
+    wheels.latT = crearRuleta($("#w-latt"), 0, 999, 3, (v) => setParte("lat", "t", v));
+    wheels.lonD = crearRuleta($("#w-lond"), 0, 179, 3, (v) => setParte("lon", "d", v));
+    wheels.lonM = crearRuleta($("#w-lonm"), 0, 59, 2, (v) => setParte("lon", "m", v));
+    wheels.lonT = crearRuleta($("#w-lont"), 0, 999, 3, (v) => setParte("lon", "t", v));
+  }
+  sincronizarRuletas();
+  refrescarEditor();
+}
+
+function partes(v) {
+  const a = Math.abs(v);
+  let d = Math.floor(a);
+  const minTot = (a - d) * 60;
+  let m = Math.floor(minTot), t = Math.round((minTot - m) * 1000);
+  if (t === 1000) { t = 0; m += 1; }
+  if (m === 60) { m = 0; d += 1; }
+  return { d, m, t, neg: v < 0 };
+}
+function componer(d, m, t, neg) {
+  const v = d + m / 60 + t / 60000;
+  return neg ? -v : v;
+}
+function sincronizarRuletas() {
+  const A = partes(editVal.lat), O = partes(editVal.lon);
+  wheels.latD.set(A.d); wheels.latM.set(A.m); wheels.latT.set(A.t);
+  wheels.lonD.set(O.d); wheels.lonM.set(O.m); wheels.lonT.set(O.t);
+  $("#ed-hemlat").textContent = editVal.lat >= 0 ? "N" : "S";
+  $("#ed-hemlon").textContent = editVal.lon >= 0 ? "E" : "O";
+}
+function setParte(eje, cual, v) {
+  const p = partes(editVal[eje]);
+  p[cual] = v;
+  editVal[eje] = componer(p.d, p.m, p.t, p.neg);
+  refrescarEditor();
+}
+function refrescarEditor() {
+  $("#ed-read").textContent = fmtLat(editVal.lat) + "   " + fmtLon(editVal.lon);
+  const m = S.marks.find((x) => x.id === editId);
+  if (!m) return;
+  m.lat = editVal.lat; m.lon = editVal.lon;
+  const lay = markLayers.get(editId);
+  if (lay) lay.setLatLng([m.lat, m.lon]);
+  courseLine.setLatLngs(S.marks.map((x) => [x.lat, x.lon]));
+  map.panTo([m.lat, m.lon], { animate: false });
+  render();
+}
+function cerrarEditor(guardando) {
+  const m = S.marks.find((x) => x.id === editId);
+  if (m && guardando) { m.name = $("#ed-name").value.trim() || m.name; m.role = $("#ed-role").value; }
+  $("#editor").classList.remove("on");
+  editId = null;
+  guardar(); pintarMarcas(); pintarPanelMarcas(); render();
+}
+function nudge(eje, delta) {   /* botones finos: ±0.001' */
+  editVal[eje] += (editVal[eje] < 0 ? -1 : 1) * delta / 60000;
+  sincronizarRuletas(); refrescarEditor();
+}
+function cambiarHemi(eje) {
+  editVal[eje] = -editVal[eje];
+  sincronizarRuletas(); refrescarEditor();
+}
+
+/* =====================================================================
+   Marcas: alta, baja, orden
+   ===================================================================== */
+
+let modoAnadir = false;
+
+function anadirMarca({ lat, lon, name, role }, abrir) {
+  const n = S.marks.length + 1;
+  const m = {
+    id: uid(), lat, lon,
+    name: name || `Boya ${n}`,
+    role: role || (n === 1 ? "comite" : n === 2 ? "boya" : "paso"),
+  };
+  S.marks.push(m);
+  guardar(); pintarMarcas(); render(); pintarPanelMarcas();
+  if (abrir) abrirEditor(m.id);
+}
+function borrarMarca(id) {
+  S.marks = S.marks.filter((m) => m.id !== id);
+  S.activeIdx = clamp(S.activeIdx, 0, Math.max(0, S.marks.length - 1));
+  guardar(); pintarMarcas(); render(); pintarPanelMarcas();
+}
+function moverMarca(i, dir) {
+  const j = i + dir; if (j < 0 || j >= S.marks.length) return;
+  [S.marks[i], S.marks[j]] = [S.marks[j], S.marks[i]];
+  guardar(); pintarMarcas(); render(); pintarPanelMarcas();
+}
+function avanzarSiLlego() {
+  if (!S.autoAdvance || !S.fix) return;
+  const m = marcaActiva(); if (!m) return;
+  if (distM(S.fix, m) < S.arrivalRadius && S.activeIdx < S.marks.length - 1) {
+    S.activeIdx++; beep(1200, .25); pintarMarcas(); guardar();
+  }
+}
+
+/* =====================================================================
+   Render
+   ===================================================================== */
+
+function estado(k, txt, ok) {
+  const el = $("#st-" + k); if (!el) return;
+  el.textContent = txt;
+  el.parentElement.dataset.ok = ok ? "1" : "0";
+}
+
+function render() {
+  const t = tactica();
+  const w = t.w;
+
+  $("#hud-twd").textContent = pad3(w.twd) + "°";
+  $("#hud-tws").textContent = w.tws != null ? w.tws.toFixed(1) : "—";
+  $("#hud-src").textContent = w.src;
+  const h = rumbo();
+  $("#hud-hdg").textContent = h == null ? "---" : pad3(h) + "°";
+  $("#hud-sog").textContent = (S.fix?.sog ?? S.sensors.sog) != null
+    ? (S.fix?.sog ?? S.sensors.sog).toFixed(1) : "—";
+  $("#hud-twa").textContent = h == null ? "---" : Math.round(Math.abs(n180(h - w.twd))) + "°";
+  estado("hdg", S.hdgUsada, h != null);
+  $("#wind-arrow").style.transform = `rotate(${w.twd + 180}deg)`;
+
+  /* banner de recomendación */
+  const B = $("#banner");
+  if (!S.fix) B.innerHTML = `<div class="bn-t">Sin posición</div><div class="bn-s">Activa el GPS o el simulador para calcular rumbos.</div>`;
+  else if (!t.mark) B.innerHTML = `<div class="bn-t">Sin marcas</div><div class="bn-s">Añade las boyas del recorrido para empezar.</div>`;
+  else {
+    const dn = (t.dist / NM).toFixed(2);
+    const eta = t.eta ? `${Math.floor(t.eta / 60)}:${pad2(Math.round(t.eta % 60))}` : "—";
+    let tit = "", sub = "";
+    if (t.tipo === "directo") {
+      tit = `RUMBO DIRECTO ${pad3(t.rumboRec)}°`;
+      sub = `TWA ${Math.round(Math.abs(t.twaRec))}° · ${t.mark.name} a ${dn} NM · ETA ${eta}`;
+    } else {
+      const cls = t.largo === "estribor" ? "stbd" : "port";
+      const verbo = t.tipo === "cenida" ? "Ceñida" : "Empopada";
+      const rumboLargo = t.largo === "estribor" ? t.stbd : t.port;
+      tit = `<span class="${cls}">${verbo.toUpperCase()} · AMURA DE ${t.largo.toUpperCase()} ${pad3(rumboLargo)}°</span>`;
+      const otro = t.largo === "estribor" ? t.port : t.stbd;
+      const lay = t.distLay != null
+        ? ` · ${t.tipo === "cenida" ? "viras" : "trasluchas"} en ${(t.distLay / NM).toFixed(2)} NM`
+        : "";
+      const pasado = (t.tipo === "cenida" && (Math.abs(t.twaMark) >= S.upAngle - .5));
+      sub = `Bordo largo. Otro bordo ${pad3(otro)}°${lay} · ${t.mark.name} ${dn} NM · ETA ${eta}`;
+      if (t.tipo === "cenida" && Math.abs(t.twaMark) > S.upAngle - 2)
+        sub = `Estás en la layline: rumbo ${pad3(t.brg)}° te deja la marca de un bordo · ${dn} NM`;
+    }
+    B.innerHTML = `<div class="bn-t">${tit}</div><div class="bn-s">${sub}</div>`;
+  }
+
+  pintarBarco();
+  pintarLaylines(t);
+  const ls = lineaSalida();
+  pintarLinea(ls);
+  avanzarSiLlego();
+
+  if (panelActivo === "tactica") pintarTactica(t, ls);
+  if (panelActivo === "viento") pintarViento();
+}
+
+/* ---------- panel táctica ---------- */
+function pintarTactica(t, ls) {
+  const c = $("#p-tactica");
+  const rows = [];
+  if (t.mark) {
+    rows.push(["Marca activa", `${S.activeIdx + 1} · ${t.mark.name}`]);
+    rows.push(["Demora / distancia", `${pad3(t.brg)}° · ${(t.dist / NM).toFixed(2)} NM`]);
+    rows.push(["TWA a la marca", `${Math.round(Math.abs(t.twaMark))}°`]);
+    if (t.tipo !== "directo") {
+      rows.push(["Ceñida estribor", `${pad3(t.stbd)}°`, "stbd"]);
+      rows.push(["Ceñida babor", `${pad3(t.port)}°`, "port"]);
+      rows.push(["Grados a layline estribor", `${Math.round(t.gradosLayStbd ?? 0)}°`]);
+      rows.push(["Grados a layline babor", `${Math.round(t.gradosLayPort ?? 0)}°`]);
+    }
+  }
+  if (ls) {
+    rows.push(["— Línea de salida —", ""]);
+    rows.push(["Demora boya→comité", `${pad3(ls.brgPC)}° · ${Math.round(ls.len)} m`]);
+    rows.push(["Sesgo", `${Math.round(ls.delta)}°`]);
+    rows.push(["Extremo favorecido",
+      ls.fav === "igual" ? "línea cuadrada" : `${ls.fav === "boya" ? "boya" : "comité"} (+${Math.round(ls.ventaja)} m)`,
+      ls.fav === "igual" ? "" : "brass"]);
+    if (ls.dLinea != null) {
+      rows.push(["Distancia a la línea", `${Math.round(ls.dLinea)} m`]);
+      const l = segRestantes();
+      if (ls.tLinea != null && l != null && l > 0)
+        rows.push(["Tiempo sobrante", `${Math.round(l - ls.tLinea)} s`,
+          l - ls.tLinea < 0 ? "port" : "stbd"]);
+    }
+  }
+  c.querySelector(".rows").innerHTML = rows.map(([a, b, cl]) =>
+    `<div class="row"><span>${a}</span><b class="${cl || ""}">${b}</b></div>`).join("");
+
+  const l = segRestantes();
+  $("#crono").textContent = l == null ? "—:—"
+    : (l < 0 ? "+" : "") + `${Math.floor(Math.abs(l) / 60)}:${pad2(Math.floor(Math.abs(l) % 60))}`;
+}
+
+/* ---------- panel marcas ---------- */
+function pintarPanelMarcas() {
+  const c = $("#p-marcas .lista");
+  if (!S.marks.length) {
+    c.innerHTML = `<p class="hint">Aún no hay boyas. Toca «Tocar mapa» y marca los vértices del recorrido, pega coordenadas del anuncio de regata o fondea una con tu posición actual.</p>`;
+    return;
+  }
+  c.innerHTML = S.marks.map((m, i) => `
+    <div class="mrow ${i === S.activeIdx ? "act" : ""}">
+      <button class="mnum" data-act="${i}" style="--c:${ROLES[m.role].color}">${i + 1}</button>
+      <div class="mmid">
+        <input class="mname" data-id="${m.id}" value="${m.name.replace(/"/g, "&quot;")}">
+        <div class="mco">${fmtLat(m.lat)} &nbsp; ${fmtLon(m.lon)}</div>
+      </div>
+      <select class="mrole" data-id="${m.id}">
+        ${Object.entries(ROLES).map(([k, v]) =>
+          `<option value="${k}" ${m.role === k ? "selected" : ""}>${v.label}</option>`).join("")}
+      </select>
+      <div class="mbtns">
+        <button data-edit="${m.id}" class="ed">⌖</button>
+        <button data-up="${i}">▲</button><button data-dn="${i}">▼</button>
+        <button data-del="${m.id}" class="del">✕</button>
+      </div>
+    </div>`).join("");
+
+  c.querySelectorAll("[data-act]").forEach((b) => b.onclick = () => {
+    S.activeIdx = +b.dataset.act; guardar(); pintarMarcas(); pintarPanelMarcas(); render();
+  });
+  c.querySelectorAll("[data-up]").forEach((b) => b.onclick = () => moverMarca(+b.dataset.up, -1));
+  c.querySelectorAll("[data-dn]").forEach((b) => b.onclick = () => moverMarca(+b.dataset.dn, 1));
+  c.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => borrarMarca(b.dataset.del));
+  c.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => abrirEditor(b.dataset.edit));
+  c.querySelectorAll(".mname").forEach((i) => i.onchange = () => {
+    const m = S.marks.find((x) => x.id === i.dataset.id); if (m) { m.name = i.value; guardar(); pintarMarcas(); }
+  });
+  c.querySelectorAll(".mrole").forEach((s) => s.onchange = () => {
+    const m = S.marks.find((x) => x.id === s.dataset.id); if (m) { m.role = s.value; guardar(); pintarMarcas(); render(); }
+  });
+}
+
+/* ---------- panel viento ---------- */
+function pintarViento() {
+  const c = $("#p-viento .wx");
+  if (!S.wx) { c.innerHTML = `<p class="hint">Sin previsión todavía. Toca «Actualizar» con al menos una boya puesta.</p>`; return; }
+  const n = S.wx.now;
+  c.innerHTML = `
+    <div class="wxnow">
+      <div><span class="lab">Viento</span><b>${n.spd.toFixed(0)} kn</b></div>
+      <div><span class="lab">Racha</span><b>${n.gust.toFixed(0)} kn</b></div>
+      <div><span class="lab">Dirección</span><b>${pad3(n.dir)}°</b></div>
+      <div><span class="lab">Temp.</span><b>${n.temp.toFixed(0)}°</b></div>
+      <div><span class="lab">Presión</span><b>${n.pres.toFixed(0)}</b></div>
+    </div>
+    <div class="wxstrip">
+      ${S.wx.horas.map((h) => `
+        <div class="wxh">
+          <span class="hh">${new Date(h.t).getHours()}h</span>
+          <svg width="22" height="22" viewBox="0 0 22 22" style="transform:rotate(${h.dir + 180}deg)">
+            <path d="M11 3 L11 19 M11 19 L7 14 M11 19 L15 14" stroke="#E8B04B" stroke-width="2"
+              fill="none" stroke-linecap="round"/></svg>
+          <b>${h.spd.toFixed(0)}</b><span class="g">${h.gust.toFixed(0)}</span>
+        </div>`).join("")}
+    </div>
+    <p class="hint">Datos horarios de Open-Meteo en el centro del recorrido
+      (${S.wx.lugar.lat.toFixed(3)}, ${S.wx.lugar.lon.toFixed(3)}). Nudos a 10 m.</p>`;
+}
+
+/* ---------- diagnóstico ---------- */
+function pintarDiag() {
+  const c = $("#p-ajustes .diag");
+  if (!c) return;
+  c.innerHTML = diagnostico().map(([a, b, cl]) =>
+    `<div class="row"><span>${a}</span><b class="${cl || ""}">${b}</b></div>`).join("");
+}
+
+/* ---------- panel mqtt ---------- */
+function pintarMapeo() {
+  const c = $("#p-mqtt .mapeo");
+  c.innerHTML = Object.entries(FIELDS).map(([k, lab]) => {
+    const m = S.mqtt.map[k];
+    const v = S.sensors[k];
+    return `<div class="mqrow">
+      <div class="mqlab">${lab}<span class="mqv">${v != null ? v.toFixed(1) : "—"}</span></div>
+      <div class="mqin">
+        <input placeholder="topic" data-f="${k}" data-p="topic" value="${m.topic}">
+        <input placeholder="clave JSON" data-f="${k}" data-p="json" value="${m.json}">
+        <input placeholder="×" data-f="${k}" data-p="k" value="${m.k}" class="k">
+      </div></div>`;
+  }).join("");
+  c.querySelectorAll("input").forEach((i) => i.onchange = () => {
+    S.mqtt.map[i.dataset.f][i.dataset.p] = i.dataset.p === "k" ? Number(i.value) || 1 : i.value.trim();
+    guardar();
+    if (client?.connected && i.dataset.p === "topic" && i.value.trim())
+      client.subscribe(i.value.trim());
+  });
+}
+function pintarLog() {
+  const c = $("#p-mqtt .log");
+  if (!S.log.length) { c.innerHTML = `<p class="hint">Nada recibido aún. Con el filtro <code>#</code> verás todo lo que publica el barco y podrás asignar cada topic a un dato.</p>`; return; }
+  c.innerHTML = S.log.slice(0, 25).map((m, i) => `
+    <div class="lrow">
+      <div><code>${m.topic}</code><span>${m.payload.slice(0, 60)}</span></div>
+      <select data-log="${i}">
+        <option value="">asignar…</option>
+        ${Object.entries(FIELDS).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}
+      </select>
+    </div>`).join("");
+  c.querySelectorAll("[data-log]").forEach((s) => s.onchange = () => {
+    const m = S.log[+s.dataset.log];
+    if (s.value && m) { S.mqtt.map[s.value].topic = m.topic; guardar(); pintarMapeo(); }
+  });
+}
+
+/* =====================================================================
+   UI
+   ===================================================================== */
+
+let panelActivo = null;
+const TITULOS = { marcas: "Boyas y recorrido", tactica: "Táctica y salida",
+  viento: "Viento y previsión", mqtt: "Sensores MQTT", ajustes: "Ajustes" };
+function abrirPanel(id) {
+  panelActivo = panelActivo === id ? null : id;
+  if (panelActivo) $("#sheet-title").textContent = TITULOS[panelActivo] || "Panel";
+  $$(".panel").forEach((p) => p.classList.toggle("on", p.id === "p-" + panelActivo));
+  $("#sheet").classList.toggle("open", !!panelActivo);
+  $$("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.p === panelActivo));
+  if (panelActivo === "marcas") pintarPanelMarcas();
+  if (panelActivo === "viento") { pintarViento(); traerMeteo(false); }
+  if (panelActivo === "mqtt") { pintarMapeo(); pintarLog(); }
+  if (panelActivo === "tactica") render();
+  if (panelActivo === "ajustes") { pintarDiag(); revisarPermiso(); estimarMosaicos(); medirAlmacenamiento(); }
+}
+
+function initUI() {
+  $$("#tabs button").forEach((b) => b.onclick = () => abrirPanel(b.dataset.p));
+  $("#sheet-close").onclick = () => abrirPanel(panelActivo);
+
+  $("#btn-tap").onclick = (e) => {
+    modoAnadir = !modoAnadir;
+    e.currentTarget.classList.toggle("on", modoAnadir);
+    map.getContainer().style.cursor = modoAnadir ? "crosshair" : "";
+  };
+  $("#btn-here").onclick = () => {
+    if (!S.fix) return alert("Sin posición GPS todavía.");
+    anadirMarca({ lat: S.fix.lat, lon: S.fix.lon }, true);
+  };
+  $("#btn-paste").onclick = () => {
+    const t = $("#coord-in").value;
+    const p = parseCoords(t);
+    if (!p) return alert("No he entendido esas coordenadas.\nPrueba: 43 21.456 N 008 24.123 O");
+    anadirMarca(p, true);
+    $("#coord-in").value = "";
+    map.setView([p.lat, p.lon], 15);
+  };
+  $("#btn-fit").onclick = () => {
+    if (!S.marks.length) return;
+    map.fitBounds(S.marks.map((m) => [m.lat, m.lon]), { padding: [60, 60] });
+  };
+  $("#btn-follow").onclick = (e) => {
+    S.followBoat = !S.followBoat;
+    e.currentTarget.classList.toggle("on", S.followBoat);
+    if (S.followBoat && S.fix) map.panTo([S.fix.lat, S.fix.lon]);
+  };
+  $("#btn-gps").onclick = () => { iniciarGPS(); iniciarBrujula(); };
+
+  $("#btn-mqtt-con").onclick = () => { S.mqtt.url = $("#mq-url").value.trim();
+    S.mqtt.user = $("#mq-user").value; S.mqtt.pass = $("#mq-pass").value;
+    S.mqtt.sniff = $("#mq-sniff").value.trim(); guardar(); conectarMqtt(); };
+  $("#btn-mqtt-dis").onclick = desconectarMqtt;
+
+  $("#btn-wx").onclick = () => traerMeteo(true);
+
+  $("#up-ang").onchange = (e) => { S.upAngle = clamp(+e.target.value || 42, 25, 60); guardar(); render(); };
+  $("#dn-ang").onchange = (e) => { S.downAngle = clamp(+e.target.value || 150, 120, 180); guardar(); render(); };
+  $("#man-twd").onchange = (e) => { S.manualTwd = n360(+e.target.value || 0); guardar(); render(); };
+  $("#man-tws").onchange = (e) => { S.manualTws = +e.target.value || 0; guardar(); render(); };
+  $("#basemap").onchange = (e) => { S.basemap = e.target.value; guardar(); ponerBase(); };
+  $("#seamark").onchange = (e) => { S.seamark = e.target.checked; guardar(); ponerBase(); };
+  $("#sim").onchange = (e) => toggleSim(e.target.checked);
+
+  /* editor de coordenadas */
+  $("#ed-done").onclick = () => cerrarEditor(true);
+  $("#ed-cancel").onclick = () => cerrarEditor(false);
+  $("#ed-hemlat").onclick = () => cambiarHemi("lat");
+  $("#ed-hemlon").onclick = () => cambiarHemi("lon");
+  $$("[data-nudge]").forEach((b) => b.onclick = () => {
+    const [eje, d] = b.dataset.nudge.split(":");
+    nudge(eje, Number(d));
+  });
+
+  /* simulador */
+  $$("[data-helm]").forEach((b) => b.onclick = () => timonear(Number(b.dataset.helm)));
+  $("#sim-tack").onclick = virarSim;
+  $$("[data-spd]").forEach((b) => b.onclick = () => {
+    if (sim) { sim.sog = clamp(sim.sog + Number(b.dataset.spd), 0, 25); pasoSim(); }
+  });
+  $$("[data-wdir]").forEach((b) => b.onclick = () => {
+    if (sim) { sim.twd = n360(sim.twd + Number(b.dataset.wdir)); pasoSim(); }
+  });
+  $$("[data-wspd]").forEach((b) => b.onclick = () => {
+    if (sim) { sim.tws = clamp(sim.tws + Number(b.dataset.wspd), 0, 45); pasoSim(); }
+  });
+  $("#sim-roles").onchange = (e) => { if (sim) sim.roles = e.target.checked; };
+  $("#sim-hide").onclick = () => $("#simctl").classList.toggle("min");
+
+  /* rumbo */
+  $("#hdg-src").onchange = (e) => { S.hdgSource = e.target.value; guardar(); render(); };
+  $("#decl").onchange = (e) => { S.decl = Number(e.target.value) || 0; guardar(); render(); };
+  $("#btn-diag").onclick = () => { revisarPermiso(); pintarDiag(); };
+
+  /* cartas sin conexión */
+  $("#btn-tiles").onclick = () => descargarCartas(+$("#z-min").value, +$("#z-max").value);
+  $("#btn-tiles-del").onclick = borrarCartas;
+  $$("#z-min, #z-max").forEach((el) => el.onchange = estimarMosaicos);
+
+  $("#btn-start").onclick = () => arrancarCrono(300);
+  $("#btn-sync").onclick = () => {
+    const l = segRestantes(); if (l == null) return;
+    const r = Math.max(0, Math.round(l / 60) * 60);
+    zero = Date.now() + r * 1000;
+    fired = new Set(GATES.filter((g) => g.t > r).map((g) => g.t));
+  };
+  $("#btn-reset").onclick = () => { zero = null; };
+
+  $("#btn-export").onclick = () => {
+    const blob = new Blob([JSON.stringify({ marks: S.marks }, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "recorrido.json"; a.click();
+  };
+  $("#imp-file").onchange = (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const d = JSON.parse(r.result);
+        if (Array.isArray(d.marks)) {
+          S.marks = d.marks.map((m) => ({ ...m, id: m.id || uid() }));
+          guardar(); pintarMarcas(); pintarPanelMarcas(); render();
+          if (S.marks.length) map.fitBounds(S.marks.map((m) => [m.lat, m.lon]), { padding: [60, 60] });
+        }
+      } catch (err) { alert("Archivo no válido."); }
+    };
+    r.readAsText(f);
+  };
+
+  /* valores iniciales */
+  $("#mq-url").value = S.mqtt.url; $("#mq-user").value = S.mqtt.user;
+  $("#mq-pass").value = S.mqtt.pass; $("#mq-sniff").value = S.mqtt.sniff;
+  $("#up-ang").value = S.upAngle; $("#dn-ang").value = S.downAngle;
+  $("#man-twd").value = S.manualTwd; $("#man-tws").value = S.manualTws;
+  $("#basemap").value = S.basemap; $("#seamark").checked = S.seamark;
+  $("#hdg-src").value = S.hdgSource; $("#decl").value = S.decl;
+}
+
+/* =====================================================================
+   Arranque
+   ===================================================================== */
+
+cargar();
+registrarSW();
+initMapa();
+initUI();
+pintarMarcas();
+render();
+if (S.marks.length) map.fitBounds(S.marks.map((m) => [m.lat, m.lon]), { padding: [60, 60] });
+
+medirAlmacenamiento();
+
+setInterval(() => { tickCrono(); if (panelActivo === "tactica") render(); }, 250);
+setInterval(() => traerMeteo(false), 10 * 60 * 1000);
+
+</script>
+</body>
+</html>
