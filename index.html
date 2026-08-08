@@ -240,16 +240,27 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
   font-family:var(--disp);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mist)}
 .rgbtns .del{color:var(--port)}
 
+.term{padding:9px 0;border-bottom:1px solid rgba(30,81,99,.5)}
+.term:last-child{border:none;padding-bottom:0}
+.term b{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:14px;
+  color:var(--brass);display:block;margin-bottom:3px}
+.term span{font-size:13px;line-height:1.5;color:var(--foam)}
+.edchk{background:var(--deck);border:1px solid var(--line);border-radius:10px;
+  padding:8px 10px;margin-bottom:9px}
+.edchk div{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:11px}
+.edchk span{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;color:var(--mist)}
+.edchk b{font-family:var(--mono);font-size:11px;color:var(--foam);text-align:right}
+
 /* ---------- tabs ---------- */
 #tabs{position:absolute;bottom:0;left:0;right:0;z-index:800;
-  display:grid;grid-template-columns:repeat(5,1fr);
+  display:grid;grid-template-columns:repeat(6,1fr);
   background:rgba(6,22,30,.97);border-top:1px solid var(--line);
   padding:6px 2px calc(6px + env(safe-area-inset-bottom));backdrop-filter:blur(8px)}
 #tabs button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 0;
-  font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:10px;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.04em;font-size:9px;
   color:var(--mist);border-radius:9px}
 #tabs button.on{color:var(--brass)}
-#tabs svg{width:20px;height:20px}
+#tabs svg{width:19px;height:19px}
 </style>
 </head>
 <body>
@@ -328,6 +339,13 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
     <button data-nudge="lon:-1">lon −0.001′</button><button data-nudge="lon:1">lon +0.001′</button>
   </div>
   <div id="ed-read">—</div>
+  <div class="edchk">
+    <div><span>Decimal</span><b id="ed-dd">—</b></div>
+    <div><span>Grados, min, seg</span><b id="ed-dms">—</b></div>
+    <div><span>Desde tu barco</span><b id="ed-dist">—</b></div>
+    <div><span>Datum</span><b id="ed-ed50">—</b></div>
+  </div>
+  <button class="btn" id="ed-ed50-btn" style="margin-bottom:10px">Convertir de ED50 a WGS84</button>
   <div class="g2">
     <div><label class="f" for="ed-name">Nombre</label><input id="ed-name"></div>
     <div><label class="f" for="ed-role">Función</label><select id="ed-role"></select></div>
@@ -485,6 +503,21 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
     </div>
   </div>
 
+  <!-- MANUAL -->
+  <div class="panel" id="p-manual">
+    <div class="blk">
+      <h4>Rumbos respecto al viento</h4>
+      <div id="rosa-rumbos"></div>
+      <p class="hint">El viento entra por arriba. Verde a la derecha, amurado a estribor; rojo a la
+        izquierda, amurado a babor. El sector oscuro de proa es la zona donde el barco no navega.</p>
+    </div>
+    <div class="blk" style="padding-bottom:9px">
+      <label class="f" for="glos-buscar">Buscar</label>
+      <input id="glos-buscar" placeholder="escota, layline, orzar…">
+    </div>
+    <div class="glos"></div>
+  </div>
+
   <!-- AJUSTES -->
   <div class="panel" id="p-ajustes">
     <div class="blk">
@@ -493,6 +526,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
       <select id="basemap">
         <option value="nautica">Náutica clara</option>
         <option value="oscuro">Oscura de noche</option>
+        <option value="satelite">Satélite</option>
       </select>
       <div class="sw" style="margin-top:9px">
         <span>Superponer balizamiento OpenSeaMap</span>
@@ -566,6 +600,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
   <button data-p="tactica"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor"/></svg>Táctica</button>
   <button data-p="viento"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8h11a3 3 0 10-3-3M3 13h15a3 3 0 11-3 3M3 18h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Viento</button>
   <button data-p="mqtt"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20a16 16 0 0116-16M4 20a10 10 0 0110-10M4 20a4 4 0 014-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Sensores</button>
+  <button data-p="manual"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5A1.5 1.5 0 015.5 4H11v16H5.5A1.5 1.5 0 014 18.5zM20 5.5A1.5 1.5 0 0018.5 4H13v16h5.5a1.5 1.5 0 001.5-1.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>Manual</button>
   <button data-p="ajustes"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Ajustes</button>
 </nav>
 
@@ -620,10 +655,20 @@ function fmtLon(v) {
   const h = v >= 0 ? "E" : "O", a = Math.abs(v), d = Math.floor(a);
   return `${String(d).padStart(3, "0")}° ${((a - d) * 60).toFixed(3).padStart(6, "0")}' ${h}`;
 }
-/* acepta: "43.357,-8.402" · "43 21.456 N 008 24.123 O" · 43°21'27"N 8°24'07"W */
+/* acepta: "43.357,-8.402" · "43 21.456 N 008 24.123 O" · 43°21'27"N 8°24'07"W
+   · "3721.456N 00824.123W" (formato NMEA)                                     */
 function parseCoords(txt) {
   if (!txt) return null;
   const s = txt.trim().toUpperCase().replace(/,/g, " ").replace(/[°'"´’]/g, " ");
+
+  /* NMEA: DDMM.mmm / DDDMM.mmm. Se detecta entero para no adivinar a medias */
+  const nmea = s.match(/^\s*(\d{2})(\d{2}\.\d+)\s*([NS])\s+(\d{3})(\d{2}\.\d+)\s*([EWO])\s*$/);
+  if (nmea) {
+    const lat = (+nmea[1] + +nmea[2] / 60) * (nmea[3] === "S" ? -1 : 1);
+    const lon = (+nmea[4] + +nmea[5] / 60) * (nmea[6] === "E" ? 1 : -1);
+    return { lat, lon };
+  }
+
   const toks = s.match(/-?\d+(?:\.\d+)?|[NSEWO]/g);
   if (!toks) return null;
   const grupos = [];
@@ -642,11 +687,14 @@ function parseCoords(txt) {
   }
 
   const val = (g) => {
-    const nums = g.filter((x) => !/[NSEWO]/.test(x)).map(Number);
+    const crudos = g.filter((x) => !/[NSEWO]/.test(x));
+    const nums = crudos.map(Number);
     const hemi = g.find((x) => /[NSEWO]/.test(x));
     if (!nums.length) return null;
-    let v = Math.abs(nums[0]) + (nums[1] || 0) / 60 + (nums[2] || 0) / 3600;
-    if (nums[0] < 0) v = -v;
+    /* ojo: -0 no es menor que 0, hay que mirar el texto */
+    const negSigno = crudos[0].trim().startsWith("-");
+    let v = Math.abs(nums[0]) + Math.abs(nums[1] || 0) / 60 + Math.abs(nums[2] || 0) / 3600;
+    if (negSigno) v = -v;
     if (hemi === "S" || hemi === "W" || hemi === "O") v = -Math.abs(v);
     if (hemi === "N" || hemi === "E") v = Math.abs(v);
     return { v, hemi };
@@ -657,6 +705,26 @@ function parseCoords(txt) {
   if (a.hemi === "E" || a.hemi === "W" || a.hemi === "O") { lat = b.v; lon = a.v; }
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
   return { lat, lon };
+}
+
+/* ---------- conversión de datum ---------- */
+/* ED50 -> WGS84, Molodensky abreviada. Las instrucciones de regata españolas
+   antiguas y las cartas viejas del IHM van en ED50: unos 165 m de diferencia. */
+function ed50aWgs84(lat, lon, h = 0) {
+  const a = 6378388.0, f = 1 / 297.0;
+  const da = 6378137.0 - a, df = 1 / 298.257223563 - f;
+  const dx = -87, dy = -98, dz = -121;
+  const p = rad(lat), l = rad(lon);
+  const e2 = 2 * f - f * f;
+  const sp = Math.sin(p), cp = Math.cos(p), sl = Math.sin(l), cl = Math.cos(l);
+  const W = Math.sqrt(1 - e2 * sp * sp);
+  const Rn = a / W, Rm = (a * (1 - e2)) / (W * W * W);
+  const ba = 1 - f;
+  const dLat = (-dx * sp * cl - dy * sp * sl + dz * cp
+    + (da * Rn * e2 * sp * cp) / a
+    + df * (Rm / ba + Rn * ba) * sp * cp) / (Rm + h);
+  const dLon = (-dx * sl + dy * cl) / ((Rn + h) * cp);
+  return { lat: lat + deg(dLat), lon: lon + deg(dLon) };
 }
 
 /* =====================================================================
@@ -872,6 +940,8 @@ const markLayers = new Map();
 const BASES = {
   nautica: { url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attr: "© OpenStreetMap", max: 19 },
   oscuro:  { url: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", attr: "© OpenStreetMap © CARTO", max: 20 },
+  satelite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+              attr: "Imágenes © Esri, Maxar, Earthstar Geographics", max: 19 },
 };
 
 function initMapa() {
@@ -1574,6 +1644,123 @@ function actualizarRec() {
 }
 
 /* =====================================================================
+   Manual: vocabulario y conceptos
+   ===================================================================== */
+
+const MANUAL = [
+  ["A bordo", [
+    ["Babor", "El costado izquierdo mirando hacia proa. Su luz de navegación es roja. En esta app, todo lo de babor va en rojo."],
+    ["Estribor", "El costado derecho mirando hacia proa. Luz verde. Es el bando que manda: en un cruce, el barco amurado a estribor tiene preferencia."],
+    ["Proa y popa", "La parte de delante y la de atrás. Lo que queda a un lado por delante del través es la amura; por detrás, la aleta."],
+    ["Barlovento", "De donde viene el viento. Estar a barlovento de otro barco es estar en el lado del viento, y normalmente es la posición ventajosa."],
+    ["Sotavento", "El lado contrario, adonde va el viento. Un barco a sotavento recibe el viento sucio del de barlovento."],
+    ["Través", "El costado, a 90° de la crujía. También el rumbo en que el viento entra justo por ahí."],
+  ]],
+  ["Rumbos respecto al viento", [
+    ["Ceñida", "Navegar lo más cerca posible del viento, unos 40-45° del viento real. Es el rumbo más lento pero el único que gana barlovento. Ciñendo se avanza en zigzag, virando."],
+    ["Zona muerta", "El sector de unos 80-90° de frente al viento donde el barco no puede navegar. Si entras, te quedas en facha, parado con las velas flameando."],
+    ["Descuartelar", "Rumbo intermedio entre ceñida y través, con el viento algo abierto. Cómodo y rápido."],
+    ["Través", "Viento a 90°. Suele ser el rumbo más veloz en muchos barcos."],
+    ["Largo", "Viento entrando por la aleta, entre el través y la popa. Rápido y estable."],
+    ["Empopada", "Viento por detrás. Parece cómodo pero es inestable: cuidado con la trasluchada involuntaria."],
+    ["TWA", "Ángulo del viento real respecto a la proa. 0° es de frente, 180° por popa. Es el número que manda para saber en qué rumbo estás."],
+    ["Viento aparente", "El que notas a bordo, mezcla del real con el que genera tu propio avance. Siempre entra más cerrado y más fuerte que el real cuando avanzas."],
+  ]],
+  ["Maniobras", [
+    ["Amurar", "Poner el barco en una amura, es decir, con el viento entrando por un costado concreto. «Amurado a estribor» = el viento entra por estribor y la botavara está caída a babor."],
+    ["Virar por avante", "Cambiar de amura pasando la proa por el viento. Es la maniobra de la ceñida. Se pierde algo de velocidad en cada una: virar de más cuesta metros."],
+    ["Trasluchar", "Cambiar de amura pasando la popa por el viento. Es la maniobra de la empopada y la más delicada: la botavara cruza de golpe."],
+    ["Orzar", "Acercar la proa al viento, cerrar el ángulo. Se caza vela."],
+    ["Arribar", "Alejar la proa del viento, abrir el ángulo. Se lasca vela."],
+    ["Facha o en facha", "Parado con el viento de frente y las velas flameando. Útil para esperar, malo si es sin querer."],
+  ]],
+  ["Cabos y trimado", [
+    ["Escota", "El cabo que controla la apertura de una vela. Cazar escota = tirar, cerrar la vela. Lascar = soltar, abrirla."],
+    ["Driza", "El cabo que iza una vela. Su tensión controla el gratil y desplaza el punto de máxima curvatura."],
+    ["Trimar", "Ajustar el conjunto de la vela para el viento y el rumbo del momento. No es solo cazar o lascar: es forma, torsión y potencia."],
+    ["Carro o traveller", "Riel que mueve el punto de escota de la mayor a barlovento o sotavento. Cambia el ángulo sin cambiar la tensión."],
+    ["Contra o vang", "Tensor que tira de la botavara hacia abajo. Controla la torsión, sobre todo en rumbos abiertos."],
+    ["Cunningham", "Tensor del puño de amura de la mayor. Con viento, aplana la vela y desplaza el escape hacia proa."],
+    ["Catavientos", "Hilos a ambos lados de la vela. Si ambos vuelan paralelos, el flujo es limpio. El de barlovento agitado avisa de que estás muy cerrado."],
+    ["Escora", "Inclinación lateral. Un poco ayuda a ceñir; demasiada frena y hace ardiente el timón."],
+  ]],
+  ["La salida", [
+    ["Línea de salida", "Entre el mástil del barco comité y la boya. Nunca es perpendicular al viento del todo: uno de los extremos está más a barlovento y es el favorecido."],
+    ["Sesgo", "Los grados que la línea se desvía de la perpendicular al viento. Cada grado de sesgo son unos centímetros por metro de línea de ventaja en el extremo bueno."],
+    ["OCS", "On Course Side: estabas del lado del recorrido al dispararse la salida. Hay que volver y cruzar de nuevo."],
+    ["Bandera P", "Preparación. Se iza cuatro minutos antes y se arría al minuto. Con bandera I, Z, U o negra, la penalización por salir antes es más dura."],
+    ["Aplazamiento", "Bandera de inteligencia AP: la salida se retrasa, normalmente por falta de viento o por un rol grande."],
+  ]],
+  ["Táctica", [
+    ["Layline", "La línea imaginaria desde la boya con el ángulo de ceñida. Al pisarla, alcanzas la boya de un solo bordo. Pasarse de layline es regalar metros."],
+    ["Bordo largo", "De los dos bordos posibles, el que más te acerca a la boya. Regla general: navega primero el largo y deja el corto para el final."],
+    ["Rol", "Cambio de dirección del viento. Un rol que te permite orzar es un roll favorable; el que te obliga a arribar es un desvío y suele pedir virar."],
+    ["Racha", "Aumento momentáneo de intensidad, se ve como una mancha oscura en el agua. Merece la pena ir a buscarla."],
+    ["Viento sucio", "La estela de aire revuelto que deja un barco a sotavento y por detrás de él. Salir de ahí es prioritario."],
+    ["Cubrir", "Colocarse entre un rival y el viento o la próxima boya para controlarlo. Se cubre cuando vas por delante."],
+  ]],
+  ["Reglas que más se usan", [
+    ["Regla 10", "Barcos en amuras opuestas: el amurado a babor se aparta del amurado a estribor. La más invocada de todas."],
+    ["Regla 11", "Misma amura y comprometidos: el de barlovento se aparta del de sotavento."],
+    ["Regla 12", "Misma amura y sin compromiso: el de atrás se aparta del de delante."],
+    ["Regla 13", "Mientras viras, hasta estar en rumbo de ceñida, te apartas de los demás."],
+    ["Regla 18", "En la zona de tres esloras alrededor de una boya, el exterior da espacio al interior con derecho a él."],
+    ["Regla 14", "Aunque tengas derecho de paso, tienes que evitar el contacto si es posible."],
+  ]],
+];
+
+function pintarManual(filtro = "") {
+  const f = filtro.trim().toLowerCase();
+  const c = $("#p-manual .glos");
+  const bloques = MANUAL.map(([seccion, items]) => {
+    const vis = items.filter(([t, d]) =>
+      !f || t.toLowerCase().includes(f) || d.toLowerCase().includes(f));
+    if (!vis.length) return "";
+    return `<div class="blk"><h4>${seccion}</h4>` +
+      vis.map(([t, d]) => `<div class="term"><b>${t}</b><span>${d}</span></div>`).join("") +
+      `</div>`;
+  }).join("");
+  c.innerHTML = bloques || `<p class="hint">Nada coincide con «${filtro}».</p>`;
+}
+
+function rosaRumbos() {
+  const c = 150, R = 116;
+  const sectores = [
+    [-42, 42, "#0D2934", "Zona muerta"],
+    [42, 70, "#2A5F4A", ""], [-70, -42, "#5F2A2A", ""],
+    [70, 110, "#2F7A55", ""], [-110, -70, "#7A2F2F", ""],
+    [110, 160, "#39936A", ""], [-160, -110, "#93393B", ""],
+    [160, 200, "#123542", ""],
+  ];
+  const arco = (a1, a2) => {
+    const [x1, y1] = polar(c, c, R, a1), [x2, y2] = polar(c, c, R, a2);
+    return `M ${c} ${c} L ${x1} ${y1} A ${R} ${R} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2} Z`;
+  };
+  const etiqueta = (a, txt, r = R - 30) => {
+    const [x, y] = polar(c, c, r, a);
+    return `<text x="${x}" y="${y}" text-anchor="middle" font-size="11" font-weight="600"
+      font-family="Barlow Condensed,sans-serif" fill="#EAF2F4">${txt}</text>`;
+  };
+  return `<svg viewBox="0 0 300 300" style="width:100%;max-width:320px;display:block;margin:0 auto">
+    ${sectores.map(([a, b, col]) => `<path d="${arco(a, b)}" fill="${col}" stroke="#06161E" stroke-width="1.5"/>`).join("")}
+    ${etiqueta(0, "ZONA MUERTA", R - 22)}
+    ${etiqueta(56, "CEÑIDA")}${etiqueta(-56, "CEÑIDA")}
+    ${etiqueta(90, "TRAVÉS")}${etiqueta(-90, "TRAVÉS")}
+    ${etiqueta(135, "LARGO")}${etiqueta(-135, "LARGO")}
+    ${etiqueta(180, "EMPOPADA", R - 26)}
+    <line x1="${c}" y1="8" x2="${c}" y2="${c - 34}" stroke="#E8B04B" stroke-width="3"/>
+    <polygon points="${c},${c - 30} ${c - 6},${c - 44} ${c + 6},${c - 44}" fill="#E8B04B"/>
+    <text x="${c}" y="20" text-anchor="middle" font-size="11" letter-spacing="2"
+      font-family="Barlow Condensed,sans-serif" fill="#E8B04B">VIENTO</text>
+    <circle cx="${c}" cy="${c}" r="5" fill="#EAF2F4"/>
+    <text x="${c - 78}" y="${c + 4}" text-anchor="middle" font-size="10"
+      font-family="Barlow Condensed,sans-serif" fill="#E24B4B">AMURA BABOR</text>
+    <text x="${c + 78}" y="${c + 4}" text-anchor="middle" font-size="10"
+      font-family="Barlow Condensed,sans-serif" fill="#3FCB7D">AMURA ESTRIBOR</text>
+  </svg>`;
+}
+
+/* =====================================================================
    Cartas sin conexión
    ===================================================================== */
 
@@ -1755,7 +1942,12 @@ function abrirEditor(id) {
   const m = S.marks.find((x) => x.id === id);
   if (!m) return;
   editId = id;
-  editVal = { lat: m.lat, lon: m.lon };
+  /* el hemisferio se guarda aparte: deducirlo del signo se rompe con -0,
+     que es justo el caso de las longitudes menores de un grado */
+  editVal = {
+    lat: Math.abs(m.lat), lon: Math.abs(m.lon),
+    hLat: m.lat < 0 ? "S" : "N", hLon: m.lon < 0 ? "O" : "E",
+  };
   $("#ed-name").value = m.name;
   $("#ed-role").innerHTML = Object.entries(ROLES)
     .map(([k, v]) => `<option value="${k}" ${m.role === k ? "selected" : ""}>${v.label}</option>`).join("");
@@ -1773,6 +1965,7 @@ function abrirEditor(id) {
   refrescarEditor();
 }
 
+/* partes de un valor SIEMPRE positivo */
 function partes(v) {
   const a = Math.abs(v);
   let d = Math.floor(a);
@@ -1780,43 +1973,81 @@ function partes(v) {
   let m = Math.floor(minTot), t = Math.round((minTot - m) * 1000);
   if (t === 1000) { t = 0; m += 1; }
   if (m === 60) { m = 0; d += 1; }
-  return { d, m, t, neg: v < 0 };
+  return { d, m, t };
 }
-function componer(d, m, t, neg) {
-  const v = d + m / 60 + t / 60000;
-  return neg ? -v : v;
+const componer = (d, m, t) => d + m / 60 + t / 60000;
+
+/* valor con signo, listo para el mapa */
+function valorFinal() {
+  return {
+    lat: editVal.lat * (editVal.hLat === "S" ? -1 : 1),
+    lon: editVal.lon * (editVal.hLon === "O" ? -1 : 1),
+  };
 }
+
 function sincronizarRuletas() {
   const A = partes(editVal.lat), O = partes(editVal.lon);
   wheels.latD.set(A.d); wheels.latM.set(A.m); wheels.latT.set(A.t);
   wheels.lonD.set(O.d); wheels.lonM.set(O.m); wheels.lonT.set(O.t);
-  $("#ed-hemlat").textContent = editVal.lat >= 0 ? "N" : "S";
-  $("#ed-hemlon").textContent = editVal.lon >= 0 ? "E" : "O";
+  $("#ed-hemlat").textContent = editVal.hLat;
+  $("#ed-hemlon").textContent = editVal.hLon;
 }
 function setParte(eje, cual, v) {
   const p = partes(editVal[eje]);
   p[cual] = v;
-  editVal[eje] = componer(p.d, p.m, p.t, p.neg);
+  editVal[eje] = componer(p.d, p.m, p.t);
   refrescarEditor();
 }
+function cambiarHemi(eje) {
+  if (eje === "lat") editVal.hLat = editVal.hLat === "N" ? "S" : "N";
+  else editVal.hLon = editVal.hLon === "E" ? "O" : "E";
+  sincronizarRuletas(); refrescarEditor();
+}
+function nudge(eje, delta) {                    /* ±0.001' sobre el valor absoluto */
+  editVal[eje] = Math.max(0, editVal[eje] + delta / 60000);
+  sincronizarRuletas(); refrescarEditor();
+}
+
 function refrescarEditor() {
-  $("#ed-read").textContent = fmtLat(editVal.lat) + "   " + fmtLon(editVal.lon);
+  const v = valorFinal();
+  $("#ed-read").textContent = fmtLat(v.lat) + "   " + fmtLon(v.lon);
+  $("#ed-dd").textContent = `${v.lat.toFixed(6)}, ${v.lon.toFixed(6)}`;
+  $("#ed-dms").textContent = fmtDMS(v.lat, true) + "   " + fmtDMS(v.lon, false);
+  const ed = ed50aWgs84(v.lat, v.lon);
+  const salto = distM(v, ed);
+  $("#ed-ed50").textContent = `ED50 → WGS84: ${Math.round(salto)} m al ${rumboCardinal(bearing(v, ed))}`;
+  $("#ed-dist").textContent = S.fix
+    ? `A ${(distM(S.fix, v) / NM).toFixed(2)} NM de tu posición, demora ${pad3(bearing(S.fix, v))}°`
+    : "Sin posición GPS para comparar";
+
   const m = S.marks.find((x) => x.id === editId);
   if (!m) return;
-  m.lat = editVal.lat; m.lon = editVal.lon;
+  m.lat = v.lat; m.lon = v.lon;
   const lay = markLayers.get(editId);
   if (lay) lay.setLatLng([m.lat, m.lon]);
   courseLine.setLatLngs(S.marks.map((x) => [x.lat, x.lon]));
   map.panTo([m.lat, m.lon], { animate: false });
   render();
 }
-function cerrarEditor(guardando) {
-  const m = S.marks.find((x) => x.id === editId);
-  if (m && guardando) { m.name = $("#ed-name").value.trim() || m.name; m.role = $("#ed-role").value; }
-  $("#editor").classList.remove("on");
-  editId = null;
-  guardar(); pintarMarcas(); pintarPanelMarcas(); render();
+
+function fmtDMS(v, esLat) {
+  const h = esLat ? (v >= 0 ? "N" : "S") : (v >= 0 ? "E" : "O");
+  const a = Math.abs(v), d = Math.floor(a);
+  const mm = (a - d) * 60, m = Math.floor(mm), sg = ((mm - m) * 60).toFixed(1);
+  return `${String(d).padStart(esLat ? 2 : 3, "0")}°${pad2(m)}'${String(sg).padStart(4, "0")}"${h}`;
 }
+const CARDINALES = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+  "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO"];
+const rumboCardinal = (b) => CARDINALES[Math.round(n360(b) / 22.5) % 16];
+
+function aplicarED50() {
+  const v = valorFinal();
+  const nv = ed50aWgs84(v.lat, v.lon);
+  editVal.lat = Math.abs(nv.lat); editVal.lon = Math.abs(nv.lon);
+  editVal.hLat = nv.lat < 0 ? "S" : "N"; editVal.hLon = nv.lon < 0 ? "O" : "E";
+  sincronizarRuletas(); refrescarEditor();
+}
+
 function borrarDesdeEditor() {
   const m = S.marks.find((x) => x.id === editId);
   if (!m) return;
@@ -1827,13 +2058,12 @@ function borrarDesdeEditor() {
   borrarMarca(id);
 }
 
-function nudge(eje, delta) {   /* botones finos: ±0.001' */
-  editVal[eje] += (editVal[eje] < 0 ? -1 : 1) * delta / 60000;
-  sincronizarRuletas(); refrescarEditor();
-}
-function cambiarHemi(eje) {
-  editVal[eje] = -editVal[eje];
-  sincronizarRuletas(); refrescarEditor();
+function cerrarEditor(guardando) {
+  const m = S.marks.find((x) => x.id === editId);
+  if (m && guardando) { m.name = $("#ed-name").value.trim() || m.name; m.role = $("#ed-role").value; }
+  $("#editor").classList.remove("on");
+  editId = null;
+  guardar(); pintarMarcas(); pintarPanelMarcas(); render();
 }
 
 /* =====================================================================
@@ -2091,8 +2321,9 @@ function pintarLog() {
    ===================================================================== */
 
 let panelActivo = null;
-const TITULOS = { marcas: "Boyas y recorrido", tactica: "Táctica y salida",
-  viento: "Viento y previsión", mqtt: "Sensores MQTT", ajustes: "Ajustes" };
+const TITULOS = { marcas: "Regata y recorrido", tactica: "Táctica y salida",
+  viento: "Viento y previsión", mqtt: "Sensores MQTT", manual: "Manual de vela",
+  ajustes: "Ajustes" };
 function abrirPanel(id) {
   panelActivo = panelActivo === id ? null : id;
   if (panelActivo) $("#sheet-title").textContent = TITULOS[panelActivo] || "Panel";
@@ -2103,6 +2334,10 @@ function abrirPanel(id) {
   if (panelActivo === "viento") { pintarViento(); traerMeteo(false); }
   if (panelActivo === "mqtt") { pintarMapeo(); pintarLog(); }
   if (panelActivo === "tactica") render();
+  if (panelActivo === "manual" && !$("#p-manual .glos").innerHTML) {
+    $("#rosa-rumbos").innerHTML = rosaRumbos();
+    pintarManual();
+  }
   if (panelActivo === "ajustes") { pintarDiag(); revisarPermiso(); estimarMosaicos(); medirAlmacenamiento(); }
 }
 
@@ -2202,6 +2437,12 @@ function initUI() {
     }
   };
   $("#ed-del").onclick = borrarDesdeEditor;
+  $("#ed-ed50-btn").onclick = () => {
+    if (confirm("Convertir esta coordenada de ED50 a WGS84.\n\n" +
+      "Úsalo solo si las instrucciones de regata o la carta de origen están en ED50, " +
+      "el datum antiguo español. Son unos 165 m de diferencia.")) aplicarED50();
+  };
+  $("#glos-buscar").oninput = (e) => pintarManual(e.target.value);
 
   /* secciones del panel de recorrido */
   $$("[data-sec]").forEach((b) => b.onclick = () => {

@@ -3,7 +3,7 @@
    TILES:  cache-first permanente, lo llena el botón «Descargar esta zona»
    CDN:    stale-while-revalidate                                            */
 
-const VER = "v1";
+const VER = "v2";
 const C_APP = `ploter-app-${VER}`;
 const C_TILES = "ploter-tiles";        // sin versión: no se borra al actualizar
 const C_CDN = `ploter-cdn-${VER}`;
@@ -24,7 +24,7 @@ const CDN = [
 ];
 
 const esTile = (u) =>
-  /tile\.openstreetmap\.org|basemaps\.cartocdn\.com|tiles\.openseamap\.org/.test(u.hostname);
+  /tile\.openstreetmap\.org|basemaps\.cartocdn\.com|tiles\.openseamap\.org|server\.arcgisonline\.com/.test(u.hostname);
 const esCdn = (u) =>
   /cdnjs\.cloudflare\.com|fonts\.googleapis\.com|fonts\.gstatic\.com|unpkg\.com/.test(u.hostname);
 
