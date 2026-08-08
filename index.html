@@ -251,6 +251,18 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 .edchk span{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;color:var(--mist)}
 .edchk b{font-family:var(--mono);font-size:11px;color:var(--foam);text-align:right}
 
+.cal{list-style:none;counter-reset:c;margin:12px 0 0;padding:0}
+.cal li{counter-increment:c;position:relative;padding:8px 0 8px 30px;
+  border-bottom:1px solid rgba(30,81,99,.5)}
+.cal li:last-child{border:none}
+.cal li::before{content:counter(c);position:absolute;left:0;top:8px;width:21px;height:21px;
+  border:1.5px solid var(--brass);border-radius:99px;color:var(--brass);
+  font-family:var(--mono);font-size:10px;display:grid;place-items:center}
+.cal b{font-family:var(--disp);text-transform:uppercase;letter-spacing:.07em;font-size:13px;
+  color:var(--foam);display:block}
+.cal span{font-size:12.5px;line-height:1.45;color:var(--mist)}
+.mk.fij .mk-n{border-style:double;border-width:4px}
+
 /* ---------- tabs ---------- */
 #tabs{position:absolute;bottom:0;left:0;right:0;z-index:800;
   display:grid;grid-template-columns:repeat(6,1fr);
@@ -297,6 +309,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
   <button id="btn-follow" class="on" title="Centrar en el barco">Seguir</button>
   <button id="btn-fit" title="Ver todo el recorrido">Todo</button>
   <button id="btn-tap" title="Añadir boya tocando el mapa">+Boya</button>
+  <button id="btn-lock">Fijas</button>
   <button id="btn-rec" title="Registrar la derrota">REC</button>
 </div>
 
@@ -393,7 +406,8 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
         </div>
         <button class="btn d" id="btn-borrar-todas" style="margin-top:9px">Borrar todas las boyas</button>
         <p class="hint">Toca ⌖ para afinar coordenadas con las ruletas, ✕ para borrar una boya
-          suelta. Las flechas cambian el orden en que se rodean.</p>
+          suelta. Las flechas cambian el orden en que se rodean. Con el botón «Fijas» de la carta
+          activado, las boyas no se arrastran por error; el editor sigue funcionando igual.</p>
       </div>
     </div>
 
@@ -511,8 +525,9 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
       <p class="hint">El viento entra por arriba. Verde a la derecha, amurado a estribor; rojo a la
         izquierda, amurado a babor. El sector oscuro de proa es la zona donde el barco no navega.</p>
     </div>
+    <div id="diagramas"></div>
     <div class="blk" style="padding-bottom:9px">
-      <label class="f" for="glos-buscar">Buscar</label>
+      <label class="f" for="glos-buscar">Buscar término</label>
       <input id="glos-buscar" placeholder="escota, layline, orzar…">
     </div>
     <div class="glos"></div>
@@ -747,6 +762,7 @@ const S = {
   arrivalRadius: 40,          // m
   upAngle: 42,                // TWA de ceñida
   downAngle: 150,             // TWA de empopada
+  bloqueado: true,
   basemap: "nautica",
   seamark: true,
   followBoat: true,
@@ -791,7 +807,7 @@ function guardar() {
   try {
     localStorage.setItem(SKEY, JSON.stringify({
       marks: S.marks, activeIdx: S.activeIdx, upAngle: S.upAngle, downAngle: S.downAngle,
-      basemap: S.basemap, seamark: S.seamark, mqtt: { ...S.mqtt, connected: false },
+      basemap: S.basemap, seamark: S.seamark, bloqueado: S.bloqueado, mqtt: { ...S.mqtt, connected: false },
       manualTwd: S.manualTwd, manualTws: S.manualTws, arrivalRadius: S.arrivalRadius,
       autoAdvance: S.autoAdvance, northUp: S.northUp,
       hdgSource: S.hdgSource, decl: S.decl,
@@ -983,7 +999,7 @@ function iconoMarca(m, i) {
   const act = i === S.activeIdx;
   return L.divIcon({
     className: "",
-    html: `<div class="mk ${act ? "act" : ""}" style="--c:${c}">
+    html: `<div class="mk ${act ? "act" : ""} ${S.bloqueado ? "fij" : ""}" style="--c:${c}">
              <span class="mk-n">${i + 1}</span><span class="mk-l">${m.name}</span></div>`,
     iconSize: [0, 0], iconAnchor: [0, 0],
   });
@@ -993,7 +1009,7 @@ function pintarMarcas() {
   markLayers.forEach((l) => map.removeLayer(l));
   markLayers.clear();
   S.marks.forEach((m, i) => {
-    const lay = L.marker([m.lat, m.lon], { icon: iconoMarca(m, i), draggable: true }).addTo(map);
+    const lay = L.marker([m.lat, m.lon], { icon: iconoMarca(m, i), draggable: !S.bloqueado }).addTo(map);
     lay.on("dragend", (e) => {
       const p = e.target.getLatLng();
       m.lat = p.lat; m.lon = p.lng; guardar(); render();
@@ -1709,6 +1725,156 @@ const MANUAL = [
   ]],
 ];
 
+/* ---------- diagramas del barco ---------- */
+
+const CAL_PERFIL = [
+  ["Mástil", "Sostiene el aparejo. Su inclinación hacia popa reparte potencia entre mayor y foque."],
+  ["Botavara", "Barra horizontal que sujeta el pujamen de la mayor. Al trasluchar cruza de golpe: cabezas abajo."],
+  ["Mayor", "La vela grande, por detrás del mástil. Es el motor y también el timón aerodinámico del barco."],
+  ["Foque o génova", "La vela de proa. Acelera el aire por la cara de sotavento de la mayor: las dos trabajan juntas."],
+  ["Estay de proa", "Cable que sujeta el mástil hacia delante y sobre el que va montado el foque."],
+  ["Obenques", "Cables laterales que aguantan el mástil de babor y estribor."],
+  ["Driza", "Iza la vela. Más tensión tira del gratil y adelanta la bolsa de la vela."],
+  ["Escota de mayor", "Controla cuánto se abre la vela y, con el carro fijo, también su torsión."],
+  ["Carro o traveller", "Desplaza el punto de escota a barlovento o sotavento sin tocar la tensión."],
+  ["Contra o vang", "Tira de la botavara hacia abajo. Es quien controla la torsión en rumbos abiertos."],
+  ["Cunningham", "Tensa el gratil por el puño de amura. Con viento aplana la vela y la hace más manejable."],
+  ["Catavientos", "Hilos indicadores. Si los dos vuelan rectos, el flujo es limpio y la vela está bien trimada."],
+  ["Caña y timón", "El gobierno. Si tira mucho hacia barlovento, el barco está ardiente: sobra escora o sobra mayor."],
+  ["Orza o quilla", "Genera la fuerza lateral que impide derivar. Sin ella no se podría ceñir."],
+];
+
+const CAL_PLANTA = [
+  ["Proa", "La parte de delante. Todas las referencias de a bordo se dan mirando hacia ella."],
+  ["Popa", "La parte de atrás."],
+  ["Babor", "Costado izquierdo mirando a proa. Color rojo en toda la app y en la luz de navegación."],
+  ["Estribor", "Costado derecho. Verde. En un cruce en amuras opuestas, es quien tiene preferencia."],
+  ["Crujía", "El eje longitudinal, de proa a popa. Divide los dos costados."],
+  ["Amura", "El sector de proa a unos 45°. «Amurado a estribor» = el viento entra por ese costado."],
+  ["Través", "El costado a 90°, la parte más ancha."],
+  ["Aleta", "El sector de popa a unos 45°. Por ahí entra el viento en rumbo largo."],
+  ["Barlovento", "El lado por donde llega el viento. La posición de arriba, casi siempre la ventajosa."],
+  ["Sotavento", "El lado hacia donde va el viento. Ahí cae la botavara y ahí queda el viento sucio de otros."],
+];
+
+function graficoPerfil() {
+  const num = (n, x, y) => `<g><circle cx="${x}" cy="${y}" r="10.5" fill="#06161E" stroke="#E8B04B"
+    stroke-width="1.6"/><text x="${x}" y="${y + 4}" text-anchor="middle" font-size="11"
+    font-weight="600" font-family="IBM Plex Mono,monospace" fill="#E8B04B">${n}</text></g>`;
+  const gu = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+    stroke="#87A8B3" stroke-width="1" stroke-dasharray="3 3"/>`;
+  return `<svg viewBox="0 0 340 320" style="width:100%;display:block">
+    <rect width="340" height="320" fill="#0A222C"/>
+    <line x1="0" y1="243" x2="340" y2="243" stroke="#1E5163" stroke-width="1.5"/>
+    <path d="M0 243 q20 5 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0"
+      fill="none" stroke="#1E5163" stroke-width="1.5" opacity=".6"/>
+
+    <!-- casco -->
+    <path d="M38 236 Q 170 262 306 232 L 302 218 Q 170 246 46 218 Z" fill="#123542" stroke="#4A7A8A" stroke-width="1.6"/>
+    <path d="M150 250 L 196 250 L 188 292 L 162 292 Z" fill="#123542" stroke="#4A7A8A" stroke-width="1.6"/>
+    <path d="M288 244 L 300 244 L 296 272 L 288 270 Z" fill="#123542" stroke="#4A7A8A" stroke-width="1.6"/>
+    <line x1="292" y1="244" x2="286" y2="216" stroke="#4A7A8A" stroke-width="2.5"/>
+
+    <!-- jarcia -->
+    <line x1="120" y1="228" x2="120" y2="30" stroke="#EAF2F4" stroke-width="3.5"/>
+    <line x1="120" y1="36" x2="302" y2="222" stroke="#87A8B3" stroke-width="1.2"/>
+    <line x1="120" y1="34" x2="44" y2="226" stroke="#87A8B3" stroke-width="1.2"/>
+    <line x1="120" y1="104" x2="168" y2="228" stroke="#87A8B3" stroke-width="1.2"/>
+
+    <!-- velas -->
+    <path d="M124 42 L 124 200 Q 200 204 258 206 Q 210 120 124 42 Z" fill="#DCE8EB" opacity=".93"/>
+    <path d="M116 50 L 296 218 Q 210 214 168 208 Q 132 130 116 50 Z" fill="#C7D8DD" opacity=".88"/>
+    <line x1="122" y1="202" x2="262" y2="208" stroke="#4A7A8A" stroke-width="4"/>
+
+    <!-- escota, contra, carro -->
+    <line x1="258" y1="209" x2="240" y2="232" stroke="#E8B04B" stroke-width="2"/>
+    <line x1="252" y1="209" x2="236" y2="232" stroke="#E8B04B" stroke-width="2"/>
+    <line x1="214" y1="232" x2="262" y2="230" stroke="#87A8B3" stroke-width="4"/>
+    <line x1="164" y1="205" x2="132" y2="226" stroke="#3FCB7D" stroke-width="2"/>
+    <line x1="124" y1="192" x2="132" y2="212" stroke="#E24B4B" stroke-width="2"/>
+
+    <!-- catavientos -->
+    <path d="M158 120 l 16 4 M158 148 l 16 3 M158 176 l 16 2" stroke="#E24B4B" stroke-width="1.8" fill="none"/>
+
+    ${gu(120, 60, 96, 60)} ${num(1, 84, 60)}
+    ${gu(200, 205, 200, 178)} ${num(2, 200, 168)}
+    ${gu(196, 130, 226, 118)} ${num(3, 238, 114)}
+    ${gu(190, 150, 214, 168)}
+    ${gu(150, 108, 118, 92)} ${num(4, 106, 88)}
+    ${gu(240, 176, 268, 168)} ${num(5, 280, 164)}
+    ${gu(146, 168, 122, 152)} ${num(6, 110, 148)}
+    ${gu(122, 46, 100, 34)} ${num(7, 88, 30)}
+    ${gu(250, 220, 276, 226)} ${num(8, 288, 228)}
+    ${gu(226, 231, 226, 254)} ${num(9, 226, 264)}
+    ${gu(146, 216, 122, 246)} ${num(10, 112, 254)}
+    ${gu(128, 202, 100, 210)} ${num(11, 88, 212)}
+    ${gu(166, 148, 196, 140)} ${num(12, 208, 136)}
+    ${gu(292, 250, 316, 258)} ${num(13, 322, 264)}
+    ${gu(174, 276, 148, 288)} ${num(14, 136, 292)}
+  </svg>`;
+}
+
+function graficoPlanta() {
+  const num = (n, x, y) => `<g><circle cx="${x}" cy="${y}" r="10.5" fill="#06161E" stroke="#E8B04B"
+    stroke-width="1.6"/><text x="${x}" y="${y + 4}" text-anchor="middle" font-size="11"
+    font-weight="600" font-family="IBM Plex Mono,monospace" fill="#E8B04B">${n}</text></g>`;
+  const txt = (x, y, t, col = "#87A8B3", an = "middle") =>
+    `<text x="${x}" y="${y}" text-anchor="${an}" font-size="10.5" letter-spacing="1.2"
+      font-family="Barlow Condensed,sans-serif" fill="${col}">${t}</text>`;
+  return `<svg viewBox="0 0 340 320" style="width:100%;display:block">
+    <rect width="340" height="320" fill="#0A222C"/>
+
+    <!-- viento -->
+    <line x1="300" y1="26" x2="248" y2="86" stroke="#E8B04B" stroke-width="3.5"/>
+    <polygon points="244,92 262,86 254,74" fill="#E8B04B"/>
+    ${txt(296, 18, "VIENTO REAL", "#E8B04B")}
+
+    <!-- lados -->
+    <rect x="10" y="40" width="60" height="240" fill="#E24B4B" opacity=".07"/>
+    <rect x="270" y="40" width="60" height="240" fill="#3FCB7D" opacity=".07"/>
+    ${txt(40, 60, "SOTAVENTO")} ${txt(300, 60, "BARLOVENTO")}
+
+    <!-- casco visto desde arriba -->
+    <path d="M170 34 C 204 92 214 190 202 274 L 138 274 C 126 190 136 92 170 34 Z"
+      fill="#123542" stroke="#4A7A8A" stroke-width="2"/>
+    <line x1="170" y1="40" x2="170" y2="272" stroke="#87A8B3" stroke-width="1.2" stroke-dasharray="6 5"/>
+    <path d="M170 34 C 152 70 142 130 138 190 L 138 274 L 168 274 Z" fill="#E24B4B" opacity=".22"/>
+    <path d="M170 34 C 188 70 198 130 202 190 L 202 274 L 172 274 Z" fill="#3FCB7D" opacity=".22"/>
+
+    <!-- botavara y mayor caídas a sotavento -->
+    <line x1="170" y1="120" x2="104" y2="232" stroke="#4A7A8A" stroke-width="4"/>
+    <path d="M170 120 Q 122 168 106 230 Q 150 196 170 120 Z" fill="#DCE8EB" opacity=".55"/>
+    <circle cx="170" cy="120" r="5" fill="#EAF2F4"/>
+
+    <!-- sectores -->
+    <path d="M170 152 L 232 90" stroke="#3FCB7D" stroke-width="1" stroke-dasharray="4 4"/>
+    <path d="M170 152 L 244 152" stroke="#3FCB7D" stroke-width="1" stroke-dasharray="4 4"/>
+    <path d="M170 152 L 232 214" stroke="#3FCB7D" stroke-width="1" stroke-dasharray="4 4"/>
+
+    ${num(1, 170, 20)}
+    ${num(2, 170, 292)}
+    ${num(3, 118, 152)}
+    ${num(4, 222, 152)}
+    ${num(5, 152, 246)}
+    ${num(6, 240, 82)}
+    ${num(7, 258, 152)}
+    ${num(8, 240, 222)}
+    ${num(9, 300, 100)}
+    ${num(10, 40, 100)}
+  </svg>`;
+}
+
+function pintarDiagramas() {
+  const lista = (arr) => `<ol class="cal">` +
+    arr.map(([t, d]) => `<li><b>${t}</b><span>${d}</span></li>`).join("") + `</ol>`;
+  $("#diagramas").innerHTML =
+    `<div class="blk"><h4>El barco por dentro</h4>${graficoPerfil()}${lista(CAL_PERFIL)}</div>` +
+    `<div class="blk"><h4>Bandos y sectores, vista desde arriba</h4>${graficoPlanta()}
+      <p class="hint">Aquí el barco navega amurado a estribor: el viento entra por ese costado y la
+      botavara cae a babor, que es el lado de sotavento. En un cruce, este barco tiene preferencia
+      sobre uno amurado a babor.</p>${lista(CAL_PLANTA)}</div>`;
+}
+
 function pintarManual(filtro = "") {
   const f = filtro.trim().toLowerCase();
   const c = $("#p-manual .glos");
@@ -2336,6 +2502,7 @@ function abrirPanel(id) {
   if (panelActivo === "tactica") render();
   if (panelActivo === "manual" && !$("#p-manual .glos").innerHTML) {
     $("#rosa-rumbos").innerHTML = rosaRumbos();
+    pintarDiagramas();
     pintarManual();
   }
   if (panelActivo === "ajustes") { pintarDiag(); revisarPermiso(); estimarMosaicos(); medirAlmacenamiento(); }
@@ -2372,6 +2539,19 @@ function initUI() {
     if (S.followBoat && S.fix) map.panTo([S.fix.lat, S.fix.lon]);
   };
   $("#btn-gps").onclick = () => { iniciarGPS(); iniciarBrujula(); };
+  const pintarCandado = () => {
+    $("#btn-lock").classList.toggle("on", S.bloqueado);
+    $("#btn-lock").innerHTML = S.bloqueado ? "Fijas" : "Libres";
+    $("#btn-lock").title = S.bloqueado
+      ? "Boyas fijas: no se arrastran por error"
+      : "Boyas libres: se pueden arrastrar";
+  };
+  $("#btn-lock").onclick = () => {
+    S.bloqueado = !S.bloqueado;
+    if (!S.bloqueado) beep(660, .08, .2);
+    guardar(); pintarCandado(); pintarMarcas(); pintarPanelMarcas();
+  };
+  pintarCandado();
 
   $("#btn-mqtt-con").onclick = () => { S.mqtt.url = $("#mq-url").value.trim();
     S.mqtt.user = $("#mq-user").value; S.mqtt.pass = $("#mq-pass").value;
