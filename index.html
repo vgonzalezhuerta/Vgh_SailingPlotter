@@ -280,6 +280,8 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 .cal span{font-size:12.5px;line-height:1.45;color:var(--mist)}
 .mk.fij .mk-n{border-style:double;border-width:4px}
 
+#wx-edad{font-family:var(--mono);font-size:11px;color:var(--mist);text-align:center;margin-top:10px}
+
 /* ---------- tabs ---------- */
 #tabs{position:absolute;bottom:0;left:0;right:0;z-index:800;
   display:grid;grid-template-columns:repeat(6,1fr);
@@ -507,7 +509,11 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
     <div class="blk">
       <h4>Previsión en el recorrido</h4>
       <div class="wx"></div>
-      <button class="btn" id="btn-wx" style="margin-top:11px">Actualizar</button>
+      <div id="wx-edad"></div>
+      <button class="btn" id="btn-wx" style="margin-top:9px">Actualizar ahora</button>
+      <p class="hint">Se actualiza sola: al abrir la app, cada diez minutos, cuando vuelve la
+        cobertura y cuando el recorrido se mueve más de cinco kilómetros. Si falla reintenta a los
+        30 s, al minuto, a los dos y a los cinco, en lugar de esperar el turno completo.</p>
     </div>
     <div class="blk">
       <h4>Viento manual</h4>
@@ -672,7 +678,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
    PLÓTER DE REGATA — núcleo
    ===================================================================== */
 
-const VERSION = "2026-08-09 · 8";
+const VERSION = "2026-08-09 · 9";
 const NM = 1852;
 const KN = 1.94384;                       // m/s -> nudos
 const R_EARTH = 6371000;
@@ -1163,6 +1169,7 @@ function iniciarGPS() {
       };
       S.gpsErr = null;
       estado("gps", `±${Math.round(p.coords.accuracy)} m`, true);
+      if (!S.wxAt) despertarMeteo();
       registrarPunto();
       if (S.followBoat && !mapCentrado) { map.setView([S.fix.lat, S.fix.lon], 15); mapCentrado = true; }
       render();
@@ -1299,10 +1306,15 @@ function centroide() {
   return S.fix ? { lat: S.fix.lat, lon: S.fix.lon } : null;
 }
 
+/* devuelve true si hay previsión válida, false si conviene reintentar pronto */
 async function traerMeteo(force) {
   const c = centroide();
-  if (!c) { estado("wx", "sin marcas", false); return; }
-  if (!force && Date.now() - S.wxAt < 10 * 60 * 1000) return;
+  if (!c) { estado("wx", "sin sitio", false); return false; }
+
+  /* si el recorrido se ha movido de verdad, la previsión anterior ya no vale */
+  const lejos = S.wx?.lugar && distM(S.wx.lugar, c) > 5000;
+  if (!force && !lejos && Date.now() - S.wxAt < 10 * 60 * 1000) { pintarEdadMeteo(); return true; }
+  if (!navigator.onLine) { estado("wx", "sin red", false); return false; }
   estado("wx", "consultando…", false);
   const u = "https://api.open-meteo.com/v1/forecast?latitude=" + c.lat.toFixed(4) +
     "&longitude=" + c.lon.toFixed(4) +
@@ -1329,11 +1341,52 @@ async function traerMeteo(force) {
       })),
     };
     S.wxAt = Date.now();
-    estado("wx", "actualizada", true);
+    pintarEdadMeteo();
+    render();
+    return true;
   } catch (e) {
-    estado("wx", "sin conexión", false);
+    estado("wx", S.wx ? edadMeteo() : "sin conexión", false);
+    render();
+    return false;
   }
-  render();
+}
+
+/* ---------- refresco automático ---------- */
+
+function edadMeteo() {
+  if (!S.wxAt) return "—";
+  const m = Math.round((Date.now() - S.wxAt) / 60000);
+  if (m < 1) return "ahora";
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  return `hace ${h} h ${pad2(m % 60)}`;
+}
+function pintarEdadMeteo() {
+  const viva = S.wxAt && Date.now() - S.wxAt < 90 * 60 * 1000;
+  estado("wx", S.wxAt ? edadMeteo() : "—", !!viva);
+  const el = $("#wx-edad");
+  if (el) el.textContent = S.wxAt ? `Previsión ${edadMeteo()}` : "";
+}
+
+let wxTimer = null, wxFallos = 0;
+const ESPERAS = [30, 60, 120, 300, 600];          // segundos entre reintentos
+
+function programarMeteo(ms) {
+  clearTimeout(wxTimer);
+  wxTimer = setTimeout(cicloMeteo, ms);
+}
+async function cicloMeteo() {
+  const ok = await traerMeteo(false);
+  if (ok) { wxFallos = 0; programarMeteo(10 * 60 * 1000); }
+  else {
+    const espera = ESPERAS[Math.min(wxFallos, ESPERAS.length - 1)];
+    wxFallos++;
+    programarMeteo(espera * 1000);
+  }
+}
+function despertarMeteo() {                        /* al volver la red o la pantalla */
+  wxFallos = 0;
+  programarMeteo(400);
 }
 
 /* =====================================================================
@@ -1616,6 +1669,7 @@ async function cargarRegata(id) {
   if (r.ajustes) { S.upAngle = r.ajustes.upAngle; S.downAngle = r.ajustes.downAngle;
     $("#up-ang").value = S.upAngle; $("#dn-ang").value = S.downAngle; }
   guardar(); pintarMarcas(); repintarTrack(); pintarPanelMarcas(); actualizarRec(); render();
+  despertarMeteo();
   const pts = [...S.marks.map((m) => [m.lat, m.lon]), ...track.map((p) => [p.lat, p.lon])];
   if (pts.length) map.fitBounds(pts, { padding: [50, 50] });
 }
@@ -2296,6 +2350,7 @@ function anadirMarca({ lat, lon, name, role }, abrir) {
   };
   S.marks.push(m);
   guardar(); pintarMarcas(); render(); pintarPanelMarcas();
+  despertarMeteo();
   if (abrir) abrirEditor(m.id);
 }
 function borrarMarca(id) {
@@ -2595,7 +2650,7 @@ function abrirPanel(id) {
   $("#sheet").classList.toggle("open", !!panelActivo);
   $$("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.p === panelActivo));
   if (panelActivo === "marcas") pintarPanelMarcas();
-  if (panelActivo === "viento") { pintarViento(); traerMeteo(false); }
+  if (panelActivo === "viento") { pintarViento(); pintarEdadMeteo(); }
   if (panelActivo === "mqtt") { pintarMapeo(); pintarLog(); }
   if (panelActivo === "tactica") render();
   if (panelActivo === "manual") {
@@ -2660,7 +2715,12 @@ function initUI() {
     S.mqtt.sniff = $("#mq-sniff").value.trim(); guardar(); conectarMqtt(); };
   $("#btn-mqtt-dis").onclick = desconectarMqtt;
 
-  $("#btn-wx").onclick = () => traerMeteo(true);
+  $("#btn-wx").onclick = async () => {
+    wxFallos = 0;
+    await traerMeteo(true);
+    pintarViento();
+    programarMeteo(10 * 60 * 1000);
+  };
 
   $("#up-ang").onchange = (e) => { S.upAngle = clamp(+e.target.value || 42, 25, 60); guardar(); render(); };
   $("#dn-ang").onchange = (e) => { S.downAngle = clamp(+e.target.value || 150, 120, 180); guardar(); render(); };
@@ -2812,9 +2872,17 @@ render();
 if (S.marks.length) map.fitBounds(S.marks.map((m) => [m.lat, m.lon]), { padding: [60, 60] });
 
 medirAlmacenamiento();
+pintarEdadMeteo();
+programarMeteo(1200);                       /* previsión nada más abrir */
 
 setInterval(() => { tickCrono(); if (panelActivo === "tactica") render(); }, 250);
-setInterval(() => traerMeteo(false), 10 * 60 * 1000);
+setInterval(pintarEdadMeteo, 30000);        /* refrescar el «hace X min» */
+
+/* disparadores: vuelve la red, vuelves a la app, o cambia el sitio */
+window.addEventListener("online", despertarMeteo);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && Date.now() - S.wxAt > 10 * 60 * 1000) despertarMeteo();
+});
 
 </script>
 </body>
