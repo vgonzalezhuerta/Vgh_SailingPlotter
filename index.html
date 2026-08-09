@@ -58,6 +58,23 @@ code{font-family:var(--mono);font-size:11px;color:var(--brass)}
 .chip[data-ok="1"]{color:var(--foam)}
 
 /* ---------- banner ---------- */
+#marksel{position:absolute;left:10px;right:10px;z-index:600;
+  bottom:calc(134px + env(safe-area-inset-bottom));
+  display:flex;align-items:stretch;gap:6px;
+  background:rgba(13,41,52,.95);border:1px solid var(--line);border-radius:12px;
+  padding:5px;backdrop-filter:blur(6px)}
+#marksel button{width:46px;border:1px solid var(--line);border-radius:9px;background:var(--deck2);
+  color:var(--foam);font-size:15px}
+#marksel button:disabled{opacity:.3}
+#ms-mid{flex:1;display:flex;align-items:center;gap:9px;padding:2px 4px;min-width:0}
+#ms-num{width:30px;height:30px;flex-shrink:0;border:2px solid var(--brass);border-radius:99px;
+  display:grid;place-items:center;font-family:var(--mono);font-size:13px;font-weight:600}
+.ms-txt{min-width:0;text-align:left}
+.ms-txt b{display:block;font-size:14px;font-weight:500;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.ms-txt span{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;
+  font-size:9.5px;color:var(--mist)}
+
 #banner{position:absolute;left:10px;right:10px;z-index:600;
   bottom:calc(64px + env(safe-area-inset-bottom));
   background:rgba(13,41,52,.95);border:1px solid var(--line);border-left:4px solid var(--brass);
@@ -69,7 +86,7 @@ code{font-family:var(--mono);font-size:11px;color:var(--brass)}
 
 /* ---------- botonera flotante ---------- */
 #tools{position:absolute;right:10px;z-index:600;
-  bottom:calc(146px + env(safe-area-inset-bottom));display:grid;gap:7px}
+  bottom:calc(190px + env(safe-area-inset-bottom));display:grid;gap:7px}
 #tools button{width:44px;height:44px;border-radius:12px;background:rgba(13,41,52,.94);
   border:1px solid var(--line);display:grid;place-items:center;
   font-family:var(--disp);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
@@ -197,7 +214,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 
 /* ---------- mando del simulador ---------- */
 #simctl{position:absolute;left:10px;right:10px;z-index:650;display:none;
-  bottom:calc(146px + env(safe-area-inset-bottom));
+  bottom:calc(190px + env(safe-area-inset-bottom));
   background:rgba(13,41,52,.96);border:1px solid var(--line);border-radius:12px;
   padding:9px 11px;backdrop-filter:blur(6px)}
 #simctl.on{display:block}
@@ -313,6 +330,15 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
   <button id="btn-rec" title="Registrar la derrota">REC</button>
 </div>
 
+<div id="marksel" style="display:none">
+  <button id="ms-prev" aria-label="Boya anterior">◀</button>
+  <div id="ms-mid">
+    <span id="ms-num">1</span>
+    <div class="ms-txt"><b id="ms-name">—</b><span id="ms-sub">—</span></div>
+  </div>
+  <button id="ms-next" aria-label="Boya siguiente">▶</button>
+</div>
+
 <div id="banner"><div class="bn-t">Plóter listo</div><div class="bn-s">Activa el GPS y añade las boyas.</div></div>
 
 <div id="simctl">
@@ -412,6 +438,13 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
     </div>
 
     <div id="sec-regatas" style="display:none">
+      <div class="blk">
+        <h4>Empezar de cero</h4>
+        <button class="btn p" id="btn-nueva">Nueva regata</button>
+        <p class="hint">Deja el plóter limpio: sin boyas, sin derrota y sin eventos, con el
+          cronómetro a cero. Antes de borrar te ofrece guardar la que tienes. Las regatas ya
+          guardadas y las cartas descargadas no se tocan.</p>
+      </div>
       <div class="blk">
         <h4>Registro de la derrota</h4>
         <div id="rec-estado">parado</div>
@@ -549,6 +582,17 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
       </div>
     </div>
     <div class="blk">
+      <h4>Boya activa</h4>
+      <div class="sw">
+        <span>Pasar sola a la boya siguiente</span>
+        <input type="checkbox" id="auto-adv">
+      </div>
+      <div style="margin-top:9px"><label class="f" for="arr-rad">Radio de llegada (m)</label>
+        <input id="arr-rad" type="number" inputmode="numeric"></div>
+      <p class="hint">Al entrar en ese radio, la app salta a la boya siguiente del recorrido y lo
+        anota en el registro. Si lo desactivas, cambias tú con las flechas de la carta.</p>
+    </div>
+    <div class="blk">
       <h4>Rumbo del barco</h4>
       <label class="f" for="hdg-src">Fuente</label>
       <select id="hdg-src">
@@ -628,7 +672,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
    PLÓTER DE REGATA — núcleo
    ===================================================================== */
 
-const VERSION = "2026-08-08 · 7";
+const VERSION = "2026-08-09 · 8";
 const NM = 1852;
 const KN = 1.94384;                       // m/s -> nudos
 const R_EARTH = 6371000;
@@ -2264,12 +2308,60 @@ function moverMarca(i, dir) {
   [S.marks[i], S.marks[j]] = [S.marks[j], S.marks[i]];
   guardar(); pintarMarcas(); render(); pintarPanelMarcas();
 }
+/* ---------- selector de boya activa ---------- */
+
+function irABoya(i) {
+  if (!S.marks.length) return;
+  S.activeIdx = clamp(i, 0, S.marks.length - 1);
+  guardar(); pintarMarcas(); pintarPanelMarcas(); render();
+  const m = marcaActiva();
+  if (m && !S.followBoat) map.panTo([m.lat, m.lon]);
+}
+
+function pintarSelector() {
+  const bar = $("#marksel");
+  if (!bar) return;
+  if (!S.marks.length) { bar.style.display = "none"; return; }
+  bar.style.display = "";
+  const m = S.marks[S.activeIdx];
+  const col = ROLES[m.role]?.color || "#EAF2F4";
+  $("#ms-num").textContent = S.activeIdx + 1;
+  $("#ms-num").style.borderColor = col;
+  $("#ms-num").style.color = col;
+  $("#ms-name").textContent = m.name;
+  $("#ms-sub").textContent = `${ROLES[m.role]?.label || ""} · boya ${S.activeIdx + 1} de ${S.marks.length}`;
+  $("#ms-prev").disabled = S.activeIdx === 0;
+  $("#ms-next").disabled = S.activeIdx === S.marks.length - 1;
+}
+
+/* ---------- empezar de cero ---------- */
+
+async function nuevaRegata() {
+  const hayDatos = S.marks.length || track.length > 1;
+  if (hayDatos) {
+    if (!confirm("Empezar una regata nueva borra las boyas, la derrota y los eventos de la " +
+      "pantalla.\n\nLas regatas ya guardadas y las cartas descargadas no se tocan.")) return;
+    if (confirm("¿Guardar la actual antes de borrarla?")) await guardarRegata();
+  }
+  S.marks = []; S.activeIdx = 0; S.windLog = [];
+  track = []; eventos = []; grabando = false; tInicio = null;
+  zero = null; fired = new Set();
+  $("#btn-rec").classList.remove("rec");
+  if (trackGrupo) trackGrupo.clearLayers();
+  segmentos = [];
+  layStbd.setLatLngs([]); layPort.setLatLngs([]); startLine.setLatLngs([]);
+  guardar();
+  pintarMarcas(); pintarPanelMarcas(); actualizarRec(); pintarBiblioteca(); render();
+  beep(880, .12, .3);
+}
+
 function avanzarSiLlego() {
   if (!S.autoAdvance || !S.fix) return;
   const m = marcaActiva(); if (!m) return;
   if (distM(S.fix, m) < S.arrivalRadius && S.activeIdx < S.marks.length - 1) {
     anotar("boya", `Paso por ${m.name}`);
     S.activeIdx++; beep(1200, .25); pintarMarcas(); guardar();
+    if (panelActivo === "marcas") pintarPanelMarcas();
   }
 }
 
@@ -2326,6 +2418,7 @@ function render() {
     B.innerHTML = `<div class="bn-t">${tit}</div><div class="bn-s">${sub}</div>`;
   }
 
+  pintarSelector();
   pintarBarco();
   pintarLaylines(t);
   const ls = lineaSalida();
@@ -2637,6 +2730,14 @@ function initUI() {
     }
   };
   $("#ed-del").onclick = borrarDesdeEditor;
+  $("#ms-prev").onclick = () => irABoya(S.activeIdx - 1);
+  $("#ms-next").onclick = () => irABoya(S.activeIdx + 1);
+  $("#ms-mid").onclick = () => { if (panelActivo !== "marcas") abrirPanel("marcas"); };
+  $("#btn-nueva").onclick = nuevaRegata;
+  $("#auto-adv").onchange = (e) => { S.autoAdvance = e.target.checked; guardar(); };
+  $("#arr-rad").onchange = (e) => {
+    S.arrivalRadius = clamp(Number(e.target.value) || 40, 10, 300); guardar();
+  };
   $("#ed-ed50-btn").onclick = () => {
     if (confirm("Convertir esta coordenada de ED50 a WGS84.\n\n" +
       "Úsalo solo si las instrucciones de regata o la carta de origen están en ED50, " +
@@ -2695,6 +2796,7 @@ function initUI() {
   $("#man-twd").value = S.manualTwd; $("#man-tws").value = S.manualTws;
   $("#basemap").value = S.basemap; $("#seamark").checked = S.seamark;
   $("#hdg-src").value = S.hdgSource; $("#decl").value = S.decl;
+  $("#auto-adv").checked = S.autoAdvance; $("#arr-rad").value = S.arrivalRadius;
 }
 
 /* =====================================================================
