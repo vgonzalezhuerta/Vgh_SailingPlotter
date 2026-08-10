@@ -282,6 +282,25 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 
 #wx-edad{font-family:var(--mono);font-size:11px;color:var(--mist);text-align:center;margin-top:10px}
 
+textarea{background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;
+  color:var(--foam);width:100%;font-family:var(--mono);font-size:13px;resize:vertical}
+textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
+#imp-verdicto{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:12px;
+  font-weight:600;padding:9px 10px;border-radius:9px;margin:12px 0 4px;line-height:1.35}
+#imp-verdicto.bien{background:rgba(63,203,125,.13);color:var(--stbd)}
+#imp-verdicto.mal{background:rgba(226,75,75,.14);color:var(--port)}
+.improw{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:10px 0;
+  border-bottom:1px solid rgba(30,81,99,.5)}
+.improw.dup{opacity:.62}
+.improw input[type=checkbox]{width:20px;height:20px;margin-top:6px}
+.impmid{min-width:0}
+.impname{padding:6px 8px;font-family:var(--body);font-size:14px}
+.impco{font-family:var(--mono);font-size:10.5px;color:var(--mist);margin:4px 0 2px}
+.improw select{grid-column:2;padding:5px 7px;font-size:12px;font-family:var(--body);margin-top:5px}
+.imp-ok{font-size:11px;color:var(--stbd);display:block}
+.imp-mal{font-size:11px;color:var(--port);display:block;line-height:1.4}
+.imp-na{font-size:11px;color:var(--mist);display:block}
+
 /* ---------- tabs ---------- */
 #tabs{position:absolute;bottom:0;left:0;right:0;z-index:800;
   display:grid;grid-template-columns:repeat(6,1fr);
@@ -324,7 +343,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 </div>
 
 <div id="tools">
-  <button id="btn-gps" title="Activar GPS y brújula">GPS</button>
+  <button id="btn-gps" title="Activar brújula y centrar en el barco">GPS</button>
   <button id="btn-follow" class="on" title="Centrar en el barco">Seguir</button>
   <button id="btn-fit" title="Ver todo el recorrido">Todo</button>
   <button id="btn-tap" title="Añadir boya tocando el mapa">+Boya</button>
@@ -423,6 +442,19 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
         <p class="hint">También puedes tocar «+Boya» y marcar sobre la carta, o arrastrar cualquier
           boya para ajustarla. «Fondear aquí» usa tu posición: útil para pinguear los extremos de la
           línea pasando por delante de cada uno.</p>
+      </div>
+      <div class="blk">
+        <h4>Importar del anuncio de regata</h4>
+        <textarea id="imp-texto" rows="5" placeholder="Pega aquí el texto del anuncio o de la ruta del plóter…"></textarea>
+        <div class="g2" style="margin-top:9px">
+          <button class="btn p" id="imp-analizar">Analizar</button>
+          <button class="btn" id="imp-limpiar">Limpiar</button>
+        </div>
+        <div id="imp-lista"></div>
+        <button class="btn p" id="imp-add" style="display:none;margin-top:10px">Añadir</button>
+        <p class="hint">Abre el PDF del club, selecciona el texto y pégalo. Si el anuncio trae
+          rumbos y distancias entre balizas, se comprueba la geometría: un dígito mal copiado salta
+          al instante en lugar de descubrirlo en el agua.</p>
       </div>
       <div class="blk">
         <h4>Boyas del recorrido</h4>
@@ -599,6 +631,16 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
         anota en el registro. Si lo desactivas, cambias tú con las flechas de la carta.</p>
     </div>
     <div class="blk">
+      <h4>Posición</h4>
+      <div class="sw">
+        <span>Activar el GPS al abrir la app</span>
+        <input type="checkbox" id="gps-auto">
+      </div>
+      <p class="hint">La ubicación arranca sola si ya diste permiso. La brújula del iPhone es la
+        excepción: Apple exige un toque, así que el botón GPS de la carta sigue haciendo falta una
+        vez por sesión. En Android se engancha sola también.</p>
+    </div>
+    <div class="blk">
       <h4>Rumbo del barco</h4>
       <label class="f" for="hdg-src">Fuente</label>
       <select id="hdg-src">
@@ -678,7 +720,7 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
    PLÓTER DE REGATA — núcleo
    ===================================================================== */
 
-const VERSION = "2026-08-09 · 9";
+const VERSION = "2026-08-09 · 11";
 const NM = 1852;
 const KN = 1.94384;                       // m/s -> nudos
 const R_EARTH = 6371000;
@@ -824,6 +866,7 @@ const S = {
 
   fix: null,                  // {lat,lon,acc,sog,cog,ts}
   hdgDev: null,               // brújula del móvil
+  gpsAuto: true,              // arrancar la posición al abrir
   hdgSource: "auto",          // auto | brujula | cog | mqtt
   decl: 0,                    // declinación magnética (E +)
   gpsErr: null,
@@ -864,7 +907,7 @@ function guardar() {
       basemap: S.basemap, seamark: S.seamark, bloqueado: S.bloqueado, mqtt: { ...S.mqtt, connected: false },
       manualTwd: S.manualTwd, manualTws: S.manualTws, arrivalRadius: S.arrivalRadius,
       autoAdvance: S.autoAdvance, northUp: S.northUp,
-      hdgSource: S.hdgSource, decl: S.decl,
+      hdgSource: S.hdgSource, decl: S.decl, gpsAuto: S.gpsAuto,
     }));
   } catch (e) {}
 }
@@ -1130,6 +1173,7 @@ function diagnostico() {
   d.push(["API de geolocalización", navigator.geolocation ? "disponible" : "ausente"]);
   d.push(["Orientación del dispositivo", "DeviceOrientationEvent" in window ? "disponible" : "ausente"]);
   d.push(["Permiso de ubicación", permisoGeo]);
+  d.push(["Arranque automático", S.gpsAuto ? "activado" : "desactivado"]);
   if (S.gpsErr) d.push(["Último error", S.gpsErr, "port"]);
   return d;
 }
@@ -1142,6 +1186,29 @@ async function revisarPermiso() {
     p.onchange = () => { permisoGeo = p.state; if (panelActivo === "ajustes") pintarDiag(); };
   } catch (e) { permisoGeo = "no consultable"; }
   if (panelActivo === "ajustes") pintarDiag();
+}
+
+async function autoArrancarGPS() {
+  if (!S.gpsAuto || S.sim) return;
+  if (!window.isSecureContext) {
+    S.gpsErr = "Sin contexto seguro: la página tiene que ir por https.";
+    estado("gps", "bloqueado", false); return;
+  }
+  if (!navigator.geolocation) { estado("gps", "no disponible", false); return; }
+
+  let permiso = "prompt";
+  try { permiso = (await navigator.permissions.query({ name: "geolocation" })).state; }
+  catch (e) { /* Safari antiguo no expone la API: se intenta igual */ }
+
+  if (permiso === "denied") {
+    S.gpsErr = "Permiso denegado. Ábrelo en los ajustes del navegador para este sitio.";
+    estado("gps", "permiso denegado", false); return;
+  }
+  iniciarGPS();
+
+  /* la brújula de iOS exige un gesto del usuario; en Android se engancha sola */
+  if (typeof DeviceOrientationEvent?.requestPermission !== "function") iniciarBrujula();
+  else estado("hdg", "toca GPS", false);
 }
 
 function iniciarGPS() {
@@ -2030,6 +2097,164 @@ function rosaRumbos() {
 }
 
 /* =====================================================================
+   Importar recorrido desde el anuncio de regata
+   ===================================================================== */
+
+const RE_COMP = /(\d{1,3})\s*°\s*(\d{1,2}(?:[.,]\d+)?)\s*['′’]?\s*([NSEWO])\b/gi;
+const RE_DEC = /(-?\d{1,3}\.\d{4,})\s*[,;\s]\s*(-?\d{1,3}\.\d{4,})/g;
+const BASURA = /^(LAT|LON|CRS|DIST|RAD|SPD|XTD|TOTAL)\b/i;
+
+function analizarTexto(txt) {
+  const puntos = [];
+  const lineas = txt.split(/\r?\n/);
+  let etiquetaPend = null;
+
+  const nombreDe = (linea, i) => {
+    let m = linea.match(/WP\s*\d+\s*[::.\-]\s*([^\d\n]{2,40}?)\s*(?:LAT|$)/i);
+    if (m && !BASURA.test(m[1].trim())) return m[1].trim();
+    if (etiquetaPend) { const e = etiquetaPend; etiquetaPend = null; return e; }
+    m = linea.match(/^\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9 .\-]{2,40}?)\s*[::\-]?\s*\d{1,3}\s*°/);
+    if (m && !BASURA.test(m[1].trim())) return m[1].trim();
+    return `Boya ${i}`;
+  };
+
+  lineas.forEach((linea) => {
+    const et = linea.match(/WP\s*\d+\s*[::.\-]\s*(.{2,40})$/i);
+    if (et && !/\d{1,3}\s*°/.test(linea)) etiquetaPend = et[1].trim();
+
+    const comps = [...linea.matchAll(RE_COMP)];
+    let lat = null, lon = null;
+    for (const c of comps) {
+      const g = +c[1], mm = parseFloat(c[2].replace(",", ".")), h = c[3].toUpperCase();
+      const v = g + mm / 60;
+      if (h === "N" || h === "S") lat = h === "S" ? -v : v;
+      else lon = (h === "W" || h === "O") ? -v : v;
+      if (lat !== null && lon !== null) {
+        puntos.push({ name: nombreDe(linea, puntos.length + 1), lat, lon, linea });
+        lat = lon = null;
+      }
+    }
+    if (!comps.length) {
+      for (const d of linea.matchAll(RE_DEC)) {
+        const a = +d[1], b = +d[2];
+        if (Math.abs(a) <= 90 && Math.abs(b) <= 180)
+          puntos.push({ name: nombreDe(linea, puntos.length + 1), lat: a, lon: b, linea });
+      }
+    }
+  });
+
+  puntos.forEach((p, i) => {
+    const c = p.linea.match(/CRS:?\s*(\d{1,3}(?:[.,]\d+)?)/i);
+    if (c) p.crs = parseFloat(c[1].replace(",", "."));
+    const d = p.linea.match(/DIST:?\s*(\d+(?:[.,]\d+)?)\s*(nm|mn|millas|m)\b/i);
+    if (d) {
+      const v = parseFloat(d[1].replace(",", "."));
+      p.dist = /^m$/i.test(d[2]) ? v / NM : v;
+    }
+    p.usar = true;
+    p.role = /SALIDA/i.test(p.name) ? "comite"
+      : /LLEGADA|META|FINAL/i.test(p.name) ? "llegada"
+      : /BARLOVENTO/i.test(p.name) ? "barlo"
+      : /SOTAVENTO/i.test(p.name) ? "sota" : "paso";
+    p.idx = i;
+  });
+  return puntos;
+}
+
+/* contrasta cada tramo con el rumbo y la distancia que declara el anuncio */
+function verificar(puntos) {
+  const act = puntos.filter((p) => p.usar);
+  act.forEach((p, i) => {
+    p.chequeo = null;
+    if (i === 0 || p.crs == null || p.dist == null) return;
+    const a = act[i - 1];
+    const b = bearing(a, p), d = distM(a, p) / NM;
+    const eb = Math.abs(n180(b - p.crs)), ed = Math.abs(d - p.dist);
+    p.chequeo = {
+      ok: eb <= 1.5 && ed <= 0.03,
+      calcCrs: b, calcDist: d,
+      eb, edM: ed * NM,
+    };
+  });
+  /* duplicados: el texto de los anuncios suele repetir una boya en la prosa */
+  act.forEach((p, i) => {
+    p.dup = act.some((q, j) => j < i && distM(p, q) < 80);
+  });
+  return act;
+}
+
+let importados = [];
+
+function pintarImportacion() {
+  const c = $("#imp-lista");
+  if (!importados.length) {
+    c.innerHTML = `<p class="hint">Pega el texto y pulsa Analizar. Reconoce grados y minutos
+      (37° 51.858' N), grados-minutos-segundos y decimales, con N/S/E/W u O.</p>`;
+    $("#imp-add").style.display = "none";
+    return;
+  }
+  const act = verificar(importados);
+  const malos = act.filter((p) => p.chequeo && !p.chequeo.ok).length;
+  const sinDatos = act.filter((p) => !p.chequeo).length;
+
+  c.innerHTML =
+    `<div id="imp-verdicto" class="${malos ? "mal" : "bien"}">
+       ${malos
+        ? `${malos} tramo${malos > 1 ? "s" : ""} no cuadra con el rumbo y la distancia del anuncio`
+        : `Rumbos y distancias verificados${sinDatos ? ` (${sinDatos} sin datos que contrastar)` : ""}`}
+     </div>` +
+    importados.map((p) => {
+      const ch = p.chequeo;
+      const aviso = ch && !ch.ok
+        ? `<span class="imp-mal">calculado ${pad3(ch.calcCrs)}° y ${ch.calcDist.toFixed(2)} NM ·
+           anuncio ${pad3(p.crs)}° y ${p.dist.toFixed(2)} NM · ${Math.round(ch.edM)} m de diferencia</span>`
+        : ch ? `<span class="imp-ok">${pad3(p.crs)}° · ${p.dist.toFixed(2)} NM · comprobado</span>`
+        : `<span class="imp-na">sin rumbo declarado</span>`;
+      return `<div class="improw ${p.dup ? "dup" : ""}">
+        <input type="checkbox" data-use="${p.idx}" ${p.usar ? "checked" : ""}>
+        <div class="impmid">
+          <input class="impname" data-name="${p.idx}" value="${p.name.replace(/"/g, "&quot;")}">
+          <div class="impco">${fmtLat(p.lat)} &nbsp; ${fmtLon(p.lon)}</div>
+          ${aviso}
+          ${p.dup ? `<span class="imp-na">repetida: ya hay otra a menos de 80 m</span>` : ""}
+        </div>
+        <select data-role="${p.idx}">
+          ${Object.entries(ROLES).map(([k, v]) =>
+            `<option value="${k}" ${p.role === k ? "selected" : ""}>${v.label}</option>`).join("")}
+        </select>
+      </div>`;
+    }).join("");
+
+  c.querySelectorAll("[data-use]").forEach((el) => el.onchange = () => {
+    importados[+el.dataset.use].usar = el.checked; pintarImportacion();
+  });
+  c.querySelectorAll("[data-name]").forEach((el) => el.onchange = () => {
+    importados[+el.dataset.name].name = el.value;
+  });
+  c.querySelectorAll("[data-role]").forEach((el) => el.onchange = () => {
+    importados[+el.dataset.role].role = el.value;
+  });
+  $("#imp-add").style.display = "";
+  $("#imp-add").textContent = `Añadir ${act.length} boyas al recorrido`;
+}
+
+function aplicarImportacion() {
+  const act = importados.filter((p) => p.usar);
+  if (!act.length) return;
+  const malos = verificar(importados).filter((p) => p.chequeo && !p.chequeo.ok).length;
+  if (malos && !confirm(`${malos} tramo${malos > 1 ? "s no cuadran" : " no cuadra"} con el ` +
+    `anuncio. Suele ser un dígito mal leído.\n\n¿Añadirlas igualmente?`)) return;
+  act.forEach((p) => {
+    S.marks.push({ id: uid(), lat: p.lat, lon: p.lon, name: p.name, role: p.role });
+  });
+  S.activeIdx = 0;
+  guardar(); pintarMarcas(); pintarPanelMarcas(); render(); despertarMeteo();
+  map.fitBounds(S.marks.map((m) => [m.lat, m.lon]), { padding: [50, 50] });
+  importados = []; $("#imp-texto").value = ""; pintarImportacion();
+  abrirPanel("marcas");
+}
+
+/* =====================================================================
    Cartas sin conexión
    ===================================================================== */
 
@@ -2649,7 +2874,7 @@ function abrirPanel(id) {
   $$(".panel").forEach((p) => p.classList.toggle("on", p.id === "p-" + panelActivo));
   $("#sheet").classList.toggle("open", !!panelActivo);
   $$("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.p === panelActivo));
-  if (panelActivo === "marcas") pintarPanelMarcas();
+  if (panelActivo === "marcas") { pintarPanelMarcas(); pintarImportacion(); }
   if (panelActivo === "viento") { pintarViento(); pintarEdadMeteo(); }
   if (panelActivo === "mqtt") { pintarMapeo(); pintarLog(); }
   if (panelActivo === "tactica") render();
@@ -2695,7 +2920,12 @@ function initUI() {
     e.currentTarget.classList.toggle("on", S.followBoat);
     if (S.followBoat && S.fix) map.panTo([S.fix.lat, S.fix.lon]);
   };
-  $("#btn-gps").onclick = () => { iniciarGPS(); iniciarBrujula(); };
+  $("#btn-gps").onclick = () => {
+    if (watchId == null) iniciarGPS();
+    iniciarBrujula();
+    if (S.fix) { S.followBoat = true; $("#btn-follow").classList.add("on"); map.panTo([S.fix.lat, S.fix.lon]); }
+  };
+  $("#gps-auto").onchange = (e) => { S.gpsAuto = e.target.checked; guardar(); };
   const pintarCandado = () => {
     $("#btn-lock").classList.toggle("on", S.bloqueado);
     $("#btn-lock").innerHTML = S.bloqueado ? "Fijas" : "Libres";
@@ -2794,6 +3024,15 @@ function initUI() {
   $("#ms-next").onclick = () => irABoya(S.activeIdx + 1);
   $("#ms-mid").onclick = () => { if (panelActivo !== "marcas") abrirPanel("marcas"); };
   $("#btn-nueva").onclick = nuevaRegata;
+  $("#imp-analizar").onclick = () => {
+    importados = analizarTexto($("#imp-texto").value || "");
+    if (!importados.length) alert("No he encontrado ninguna coordenada en ese texto.");
+    pintarImportacion();
+  };
+  $("#imp-add").onclick = aplicarImportacion;
+  $("#imp-limpiar").onclick = () => {
+    importados = []; $("#imp-texto").value = ""; pintarImportacion();
+  };
   $("#auto-adv").onchange = (e) => { S.autoAdvance = e.target.checked; guardar(); };
   $("#arr-rad").onchange = (e) => {
     S.arrivalRadius = clamp(Number(e.target.value) || 40, 10, 300); guardar();
@@ -2857,6 +3096,7 @@ function initUI() {
   $("#basemap").value = S.basemap; $("#seamark").checked = S.seamark;
   $("#hdg-src").value = S.hdgSource; $("#decl").value = S.decl;
   $("#auto-adv").checked = S.autoAdvance; $("#arr-rad").value = S.arrivalRadius;
+  $("#gps-auto").checked = S.gpsAuto;
 }
 
 /* =====================================================================
@@ -2874,6 +3114,7 @@ if (S.marks.length) map.fitBounds(S.marks.map((m) => [m.lat, m.lon]), { padding:
 medirAlmacenamiento();
 pintarEdadMeteo();
 programarMeteo(1200);                       /* previsión nada más abrir */
+autoArrancarGPS();                          /* posición nada más abrir */
 
 setInterval(() => { tickCrono(); if (panelActivo === "tactica") render(); }, 250);
 setInterval(pintarEdadMeteo, 30000);        /* refrescar el «hace X min» */
@@ -2881,7 +3122,9 @@ setInterval(pintarEdadMeteo, 30000);        /* refrescar el «hace X min» */
 /* disparadores: vuelve la red, vuelves a la app, o cambia el sitio */
 window.addEventListener("online", despertarMeteo);
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && Date.now() - S.wxAt > 10 * 60 * 1000) despertarMeteo();
+  if (document.hidden) return;
+  if (Date.now() - S.wxAt > 10 * 60 * 1000) despertarMeteo();
+  if (watchId == null && !S.sim) autoArrancarGPS();   /* el móvil suspende el watch */
 });
 
 </script>
