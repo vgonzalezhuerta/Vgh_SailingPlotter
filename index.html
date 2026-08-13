@@ -756,7 +756,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
    PLÓTER DE REGATA — núcleo
    ===================================================================== */
 
-const VERSION = "2026-08-10 · 13";
+const VERSION = "2026-08-13 · 14";
 const NM = 1852;
 const KN = 1.94384;                       // m/s -> nudos
 const R_EARTH = 6371000;
@@ -1161,7 +1161,7 @@ function pintarBarco() {
   const ll = [S.fix.lat, S.fix.lon];
   const hReal = rumbo() ?? S.fix.cog ?? 0;
   /* con la carta girada el contenedor ya aporta el giro: la flecha va recta */
-  const h = S.northUp ? hReal : rotActual;
+  const h = S.northUp ? hReal : rotAplicada;
   const html = `<div class="boat" style="transform:rotate(${h}deg)">
       <svg width="34" height="46" viewBox="0 0 34 46">
         <path d="M17 1 L29 32 L17 26 L5 32 Z" fill="#E8B04B" stroke="#06161E" stroke-width="2"/>
@@ -2854,30 +2854,52 @@ function limpiarSesionGuardada() {
    Orientación de la carta: norte arriba o proa arriba
    ===================================================================== */
 
-let rotActual = 0, rotObjetivo = 0, rotTimer = null;
+/* El ángulo aplicado NO se normaliza a 0-360 a propósito. Si lo hiciera, al
+   cruzar el norte la transición CSS animaría de -359° a -0° y daría la vuelta
+   entera. Se acumula sin límite (…358, 359, 360, 361…) y el giro visible es
+   siempre el camino corto. */
+let rotAplicada = 0;      // acumulador sin normalizar, lo que ve el CSS
+let rotMostrada = null;   // último valor escrito, para no repetir
 
 function aplicarRotacion(g) {
+  if (rotMostrada !== null && Math.abs(g - rotMostrada) < 0.05) return;
+  rotMostrada = g;
   const cont = map.getContainer();
-  cont.style.transform = g ? `rotate(${-g}deg)` : "";
-  /* etiquetas y marcas se contragiran para seguir legibles */
-  document.documentElement.style.setProperty("--contragiro", `${g}deg`);
-  $("#rosa-mini").style.transform = `rotate(${-g}deg)`;
-  $("#rosa-mini").style.display = g ? "" : "none";
+  cont.style.transform = `rotate(${(-g).toFixed(2)}deg)`;
+  document.documentElement.style.setProperty("--contragiro", `${g.toFixed(2)}deg`);
+  const rosa = $("#rosa-mini");
+  rosa.style.transform = `rotate(${(-g).toFixed(2)}deg)`;
 }
 
 function actualizarRotacion() {
-  if (S.northUp) {
-    if (rotActual !== 0) { rotActual = 0; aplicarRotacion(0); }
-    return;
-  }
+  if (S.northUp) return;
   const h = rumbo();
   if (h == null) return;
-  rotObjetivo = h;
-  /* interpolación por el camino corto, para que no dé la vuelta entera */
-  const d = n180(rotObjetivo - rotActual);
-  if (Math.abs(d) < 0.4) return;
-  rotActual = n360(rotActual + d * 0.25);
-  aplicarRotacion(rotActual);
+
+  /* diferencia por el camino corto respecto al ángulo acumulado */
+  const d = n180(h - rotAplicada);
+  if (Math.abs(d) < 0.3) return;
+
+  /* salto grande (cambio de fuente de rumbo, primer fix): ir directo */
+  rotAplicada += Math.abs(d) > 90 ? d : d * 0.25;
+
+  /* mantener el acumulador en un rango sano sin que se note:
+     solo se reajusta cuando coincide con el ángulo visible */
+  if (Math.abs(rotAplicada) > 3600) {
+    const equiv = n360(rotAplicada);
+    rotAplicada = equiv;
+    const cont = map.getContainer();
+    const antes = cont.style.transition;
+    cont.style.transition = "none";
+    $("#rosa-mini").style.transition = "none";
+    rotMostrada = null;
+    aplicarRotacion(rotAplicada);
+    void cont.offsetWidth;                       // forzar el repintado
+    cont.style.transition = antes;
+    $("#rosa-mini").style.transition = "";
+    return;
+  }
+  aplicarRotacion(rotAplicada);
 }
 
 /* girado, el lienzo debe ser al menos la diagonal del hueco visible */
@@ -2902,7 +2924,14 @@ function ponerOrientacion(northUp) {
   const cont = map.getContainer();
   cont.classList.toggle("girado", !northUp);
   if (northUp) {
-    rotActual = 0; aplicarRotacion(0);
+    const cont0 = map.getContainer();
+    cont0.style.transition = "none";
+    rotAplicada = 0; rotMostrada = null;
+    cont0.style.transform = "";
+    document.documentElement.style.setProperty("--contragiro", "0deg");
+    $("#rosa-mini").style.display = "none";
+    void cont0.offsetWidth;
+    cont0.style.transition = "";
     map.dragging.enable();
     $("#map-wrap").classList.remove("proa");
   } else {
@@ -2913,8 +2942,13 @@ function ponerOrientacion(northUp) {
     $("#btn-follow").classList.add("on");
     $("#map-wrap").classList.add("proa");
     if (S.fix) map.panTo([S.fix.lat, S.fix.lon]);
-    rotActual = rumbo() ?? 0;
-    aplicarRotacion(rotActual);
+    $("#rosa-mini").style.display = "";
+    const cont1 = map.getContainer();
+    cont1.style.transition = "none";
+    rotAplicada = rumbo() ?? 0; rotMostrada = null;
+    aplicarRotacion(rotAplicada);
+    void cont1.offsetWidth;
+    cont1.style.transition = "";
   }
   $("#btn-orient").classList.toggle("on", !northUp);
   $("#btn-orient").innerHTML = northUp ? "Norte" : "Proa";
