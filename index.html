@@ -28,7 +28,17 @@ button,input,select{font-family:inherit;color:inherit;font-size:16px}
 button{background:none;border:none;cursor:pointer}
 code{font-family:var(--mono);font-size:11px;color:var(--brass)}
 
-#map{position:absolute;inset:0;background:#0a2029}
+#map-wrap{position:absolute;inset:0;overflow:hidden;background:#0a2029}
+#map{position:absolute;inset:0;background:#0a2029;transform-origin:50% 50%;
+  transition:transform .18s linear}
+/* girada, la carta se agranda hasta la diagonal para tapar las esquinas.
+   El tamaño exacto lo calcula dimensionarMapa() en píxeles. */
+#map-wrap.proa #map{inset:auto;left:50%;top:50%}
+.mk-l,.witem{transition:none}
+#map.girado .mk{transform:translate(-50%,-50%) rotate(var(--contragiro,0deg))}
+#map.girado .mk-l{transform:none}
+#rosa-mini{position:absolute;top:calc(96px + env(safe-area-inset-top));left:12px;z-index:600;
+  width:44px;height:44px;pointer-events:none;transition:transform .18s linear}
 .leaflet-container{background:#0a2029;font-family:var(--body)}
 .leaflet-control-attribution{background:rgba(6,22,30,.75)!important;color:var(--mist)!important;font-size:9px}
 .leaflet-control-attribution a{color:var(--mist)!important}
@@ -102,6 +112,7 @@ code{font-family:var(--mono);font-size:11px;color:var(--brass)}
   color:var(--foam);text-shadow:0 0 4px #06161E,0 0 4px #06161E}
 .mk.act .mk-n{background:var(--c);color:#06161E;box-shadow:0 0 0 4px rgba(232,176,75,.25)}
 .boat{width:34px;height:46px;transform-origin:50% 50%}
+@media (prefers-reduced-motion:reduce){#map,#rosa-mini{transition:none}}
 
 /* ---------- sheet ---------- */
 #sheet{position:absolute;left:0;right:0;bottom:0;z-index:700;
@@ -246,6 +257,9 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 #rec-estado{font-family:var(--disp);text-transform:uppercase;letter-spacing:.16em;font-size:13px;
   font-weight:700;color:var(--mist);text-align:center;margin-bottom:10px}
 #rec-estado.rec-on{color:var(--port)}
+#pant-estado{font-size:11.5px;text-align:center;color:var(--mist);margin:-4px 0 10px;line-height:1.4}
+#pant-estado.ok{color:var(--stbd)}
+#pant-estado.mal{color:var(--port)}
 .rgrow{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:10px 0;
   border-bottom:1px solid rgba(30,81,99,.5)}
 .rgrow:last-child{border:none}
@@ -315,7 +329,14 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
 </head>
 <body>
 
-<div id="map"></div>
+<div id="map-wrap"><div id="map"></div></div>
+<svg id="rosa-mini" viewBox="0 0 44 44" style="display:none">
+  <circle cx="22" cy="22" r="20" fill="rgba(6,22,30,.9)" stroke="#1E5163" stroke-width="1.5"/>
+  <path d="M22 5 L26 22 L22 19 L18 22 Z" fill="#E24B4B"/>
+  <path d="M22 39 L18 22 L22 25 L26 22 Z" fill="#EAF2F4"/>
+  <text x="22" y="15" text-anchor="middle" font-size="7" font-family="Barlow Condensed,sans-serif"
+    fill="#EAF2F4" font-weight="700">N</text>
+</svg>
 
 <div id="hud">
   <div class="hudgrid">
@@ -339,6 +360,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
     <span class="chip" data-ok="0">MQTT <b id="st-mqtt">desconectado</b></span>
     <span class="chip" data-ok="0">Meteo <b id="st-wx">—</b></span>
     <span class="chip" data-ok="0">Red <b id="st-off">—</b></span>
+    <span class="chip" data-ok="0">Pantalla <b id="st-pant">libre</b></span>
   </div>
 </div>
 
@@ -348,6 +370,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
   <button id="btn-fit" title="Ver todo el recorrido">Todo</button>
   <button id="btn-tap" title="Añadir boya tocando el mapa">+Boya</button>
   <button id="btn-lock">Fijas</button>
+  <button id="btn-orient" title="Norte arriba o proa arriba">Norte</button>
   <button id="btn-rec" title="Registrar la derrota">REC</button>
 </div>
 
@@ -482,6 +505,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
       <div class="blk">
         <h4>Registro de la derrota</h4>
         <div id="rec-estado">parado</div>
+        <div id="pant-estado"></div>
         <div id="rec-datos"></div>
         <div class="g2" style="margin-top:11px">
           <button class="btn p" id="btn-grabar">Empezar a registrar</button>
@@ -641,6 +665,17 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
         vez por sesión. En Android se engancha sola también.</p>
     </div>
     <div class="blk">
+      <h4>Orientación de la carta</h4>
+      <select id="orient-sel">
+        <option value="norte">Norte arriba</option>
+        <option value="proa">Proa arriba</option>
+      </select>
+      <p class="hint">En proa arriba la flecha del barco queda siempre apuntando al borde superior
+        y es la carta la que gira. Lo que ves en pantalla coincide con lo que ves por la borda.
+        La vista queda anclada al barco: con la carta girada, arrastrarla daría resultados
+        engañosos, así que el desplazamiento manual se desactiva.</p>
+    </div>
+    <div class="blk">
       <h4>Rumbo del barco</h4>
       <label class="f" for="hdg-src">Fuente</label>
       <select id="hdg-src">
@@ -694,7 +729,8 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
     <div class="blk">
       <h4>Diagnóstico</h4>
       <div class="diag"></div>
-      <div class="g2" style="margin-top:10px">
+      <button class="btn" id="btn-probar-pant" style="margin-top:10px">Probar bloqueo de pantalla</button>
+      <div class="g2" style="margin-top:9px">
         <button class="btn" id="btn-diag">Volver a comprobar</button>
         <button class="btn d" id="btn-refresh">Forzar actualización</button>
       </div>
@@ -720,7 +756,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
    PLÓTER DE REGATA — núcleo
    ===================================================================== */
 
-const VERSION = "2026-08-09 · 11";
+const VERSION = "2026-08-10 · 13";
 const NM = 1852;
 const KN = 1.94384;                       // m/s -> nudos
 const R_EARTH = 6371000;
@@ -1123,7 +1159,9 @@ function pintarMarcas() {
 function pintarBarco() {
   if (!S.fix) return;
   const ll = [S.fix.lat, S.fix.lon];
-  const h = rumbo() ?? S.fix.cog ?? 0;
+  const hReal = rumbo() ?? S.fix.cog ?? 0;
+  /* con la carta girada el contenedor ya aporta el giro: la flecha va recta */
+  const h = S.northUp ? hReal : rotActual;
   const html = `<div class="boat" style="transform:rotate(${h}deg)">
       <svg width="34" height="46" viewBox="0 0 34 46">
         <path d="M17 1 L29 32 L17 26 L5 32 Z" fill="#E8B04B" stroke="#06161E" stroke-width="2"/>
@@ -1174,6 +1212,9 @@ function diagnostico() {
   d.push(["Orientación del dispositivo", "DeviceOrientationEvent" in window ? "disponible" : "ausente"]);
   d.push(["Permiso de ubicación", permisoGeo]);
   d.push(["Arranque automático", S.gpsAuto ? "activado" : "desactivado"]);
+  d.push(["API de bloqueo de pantalla", soportaWakeLock() ? "disponible" : "ausente (se usa el vídeo)"]);
+  d.push(["Pantalla ahora", pantallaActiva() ? modoPantalla : "sin bloquear",
+    pantallaActiva() ? "stbd" : ""]);
   if (S.gpsErr) d.push(["Último error", S.gpsErr, "port"]);
   return d;
 }
@@ -1481,7 +1522,7 @@ function arrancarCrono(s) {
   beep(880, .1, .3);
   anotar("salida", `Secuencia de ${s / 60} min iniciada`);
   zero = Date.now() + s * 1000; fired = new Set();
-  navigator.wakeLock?.request("screen").catch(() => {});
+  pedirWakeLock();
 }
 function segRestantes() { return zero == null ? null : (zero - Date.now()) / 1000; }
 let ultSeg = null;
@@ -1586,11 +1627,16 @@ function registrarPunto() {
   const ult = track[track.length - 1];
   if (ult) {
     const dt = (p.t - ult.t) / 1000;
+    if (dt > 45) {
+      eventos.push({ t: p.t, tipo: "hueco",
+        texto: `Interrupción de ${fmtHMS(dt)}: sin posiciones` });
+    }
     if (dt < 1) return;
     if (dt < 5 && distM(ult, p) < 1.5) return;      // fondeado: no engordamos el archivo
   }
   track.push(p);
   pintarSegmento(p, ult);
+  guardarSesion(false);
   if (panelActivo === "marcas") actualizarRec();
 }
 
@@ -1616,6 +1662,7 @@ function repintarTrack() {
 function anotar(tipo, texto) {
   if (!grabando) return;
   eventos.push({ t: Date.now(), tipo, texto });
+  guardarSesion(true);
   if (panelActivo === "marcas") actualizarRec();
 }
 
@@ -1653,14 +1700,16 @@ function toggleGrabar() {
   if (grabando) {
     if (!track.length) { tInicio = Date.now(); eventos = []; }
     anotar("inicio", "Comienza el registro");
-    navigator.wakeLock?.request("screen").catch(() => {});
-  } else anotar("pausa", "Registro pausado");
+    pedirWakeLock().then((ok) => { if (!ok) avisoPantalla(); });
+  } else { anotar("pausa", "Registro pausado"); soltarWakeLock(); }
+  guardarSesion(true);
   actualizarRec();
 }
 
 function limpiarTrack() {
   if (track.length && !confirm("¿Descartar la derrota registrada sin guardarla?")) return;
   track = []; eventos = []; tInicio = null; grabando = false;
+  soltarWakeLock(); limpiarSesionGuardada();
   $("#btn-rec").classList.remove("rec");
   if (trackGrupo) trackGrupo.clearLayers();
   segmentos = [];
@@ -1718,6 +1767,7 @@ async function guardarRegata() {
   };
   try {
     await dbGuardar(o);
+    limpiarSesionGuardada();
     $("#rg-nombre").value = "";
     await pintarBiblioteca();
     alert(`Guardada «${nombre}».`);
@@ -1789,6 +1839,7 @@ async function pintarBiblioteca() {
   if (!c) return;
   let todas = [];
   try { todas = await dbTodas(); } catch (e) { c.innerHTML = `<p class="hint">Sin almacenamiento.</p>`; return; }
+  todas = todas.filter((r) => r.id !== CLAVE_SESION);
   if (!todas.length) { c.innerHTML = `<p class="hint">Todavía no has guardado ninguna regata.</p>`; return; }
   c.innerHTML = todas.map((r) => {
     const s = r.resumen || {};
@@ -1827,6 +1878,7 @@ function actualizarRec() {
     `<div class="row"><span>Viradas y trasluchadas</span><b>${s.viradas}</b></div>` +
     `<div class="row"><span>Puntos y eventos</span><b>${s.puntos} · ${eventos.length}</b></div>`;
   $("#btn-grabar").textContent = grabando ? "Pausar registro" : (track.length ? "Reanudar" : "Empezar a registrar");
+  pintarPantalla();
 }
 
 /* =====================================================================
@@ -2391,6 +2443,7 @@ function registrarSW() {
     });
   }).catch(() => estado("off", "no registrada", false));
 
+  pintarPantalla();
   const red = () => estado("off", navigator.onLine ? "en línea" : "SIN RED", navigator.onLine);
   window.addEventListener("online", red); window.addEventListener("offline", red); red();
 
@@ -2626,6 +2679,7 @@ async function nuevaRegata() {
   S.marks = []; S.activeIdx = 0; S.windLog = [];
   track = []; eventos = []; grabando = false; tInicio = null;
   zero = null; fired = new Set();
+  soltarWakeLock(); limpiarSesionGuardada();
   $("#btn-rec").classList.remove("rec");
   if (trackGrupo) trackGrupo.clearLayers();
   segmentos = [];
@@ -2633,6 +2687,241 @@ async function nuevaRegata() {
   guardar();
   pintarMarcas(); pintarPanelMarcas(); actualizarRec(); pintarBiblioteca(); render();
   beep(880, .12, .3);
+}
+
+/* ---------- pantalla encendida ---------- */
+
+/* Dos mecanismos. El primero es la API oficial; el segundo, para navegadores
+   que no la traen, es un vídeo mudo en bucle: mientras se reproduce, el sistema
+   considera que hay actividad y no apaga la pantalla. */
+
+const VIDEO_MUDO = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMQbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjp0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAEAAAABAAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAPoAAAAAAABAAAAAAGybWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABXW1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAR1zdGJsAAAAuXN0c2QAAAAAAAAAAQAAAKlhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAEAAQABIAAAASAAAAAAAAAABFUxhdmM2MC4zMS4xMDIgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAAL2F2Y0MBQsAe/+EAF2dCwB7ZBCbARAAAAwAEAAADAAg8WLkgAQAFaMuDyyAAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAAAUkAAAFJAAAAAYc3R0cwAAAAAAAAABAAAAAQAAQAAAAAAcc3RzYwAAAAAAAAABAAAAAQAAAAEAAAABAAAAFHN0c3oAAAAAAAACkgAAAAEAAAAUc3RjbwAAAAAAAAABAAADQAAAAGJ1ZHRhAAAAWm1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALWlsc3QAAAAlqXRvbwAAAB1kYXRhAAAAAQAAAABMYXZmNjAuMTYuMTAwAAAACGZyZWUAAAKabWRhdAAAAnAGBf//bNxF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNjQgcjMxMDggMzFlMTlmOSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjMgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0wIHJlZj0zIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDE6MHgxMTEgbWU9aGV4IHN1Ym1lPTcgcHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MSBtZV9yYW5nZT0xNiBjaHJvbWFfbWU9MSB0cmVsbGlzPTEgOHg4ZGN0PTAgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tpcD0xIGNocm9tYV9xcF9vZmZzZXQ9LTIgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MCB3ZWlnaHRwPTAga2V5aW50PTI1MCBrZXlpbnRfbWluPTEgc2NlbmVjdXQ9NDAgaW50cmFfcmVmcmVzaD0wIHJjX2xvb2thaGVhZD00MCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIzLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MToxLjAwAIAAAAAaZYiEBX///w9FAAFC3ycnJ1111111111114A=";
+
+let wl = null, vidNoSleep = null, modoPantalla = "—";
+
+function soportaWakeLock() { return "wakeLock" in navigator; }
+
+async function pedirWakeLock() {
+  if (soportaWakeLock()) {
+    try {
+      if (wl && !wl.released) { modoPantalla = "bloqueo del sistema"; return true; }
+      wl = await navigator.wakeLock.request("screen");
+      wl.addEventListener("release", () => { wl = null; pintarPantalla(); });
+      modoPantalla = "bloqueo del sistema";
+      pintarPantalla();
+      return true;
+    } catch (e) { wl = null; }
+  }
+  /* respaldo */
+  try {
+    if (!vidNoSleep) {
+      vidNoSleep = document.createElement("video");
+      vidNoSleep.setAttribute("playsinline", "");
+      vidNoSleep.setAttribute("muted", "");
+      vidNoSleep.muted = true;
+      vidNoSleep.loop = true;
+      vidNoSleep.src = VIDEO_MUDO;
+      vidNoSleep.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:0;top:0";
+      document.body.appendChild(vidNoSleep);
+    }
+    await vidNoSleep.play();
+    modoPantalla = "vídeo de respaldo";
+    pintarPantalla();
+    return true;
+  } catch (e) {
+    modoPantalla = "no disponible";
+    pintarPantalla();
+    return false;
+  }
+}
+
+function soltarWakeLock() {
+  try { wl?.release(); } catch (e) {}
+  wl = null;
+  try { vidNoSleep?.pause(); } catch (e) {}
+  modoPantalla = "—";
+  pintarPantalla();
+}
+
+function pantallaActiva() {
+  return (wl && !wl.released) || (vidNoSleep && !vidNoSleep.paused);
+}
+
+function pintarPantalla() {
+  const activa = pantallaActiva();
+  estado("pant", activa ? modoPantalla : (grabando ? "APAGABLE" : "libre"), activa || !grabando);
+  const el = $("#pant-estado");
+  if (el) {
+    el.textContent = activa
+      ? `La pantalla se mantiene encendida · ${modoPantalla}`
+      : grabando ? "Atención: la pantalla puede apagarse y cortar el registro"
+      : "Se activará al empezar a grabar";
+    el.className = activa ? "ok" : grabando ? "mal" : "";
+  }
+}
+
+/* el sistema lo suelta al ocultar la app: hay que volver a pedirlo */
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && (grabando || zero != null)) pedirWakeLock();
+});
+/* y comprobarlo de vez en cuando, por si se soltó en silencio */
+setInterval(() => {
+  if ((grabando || zero != null) && !document.hidden && !pantallaActiva()) pedirWakeLock();
+}, 20000);
+
+/* ---------- aviso la primera vez ---------- */
+
+function avisoPantalla() {
+  const yaVisto = localStorage.getItem("aviso-pantalla") === "1";
+  const ok = pantallaActiva();
+  if (ok || yaVisto) return;
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const ruta = ios
+    ? "Ajustes → Pantalla y brillo → Bloqueo automático → Nunca"
+    : "Ajustes → Pantalla → Tiempo de espera de pantalla";
+  alert("No he podido impedir que la pantalla se apague en este navegador.\n\n" +
+    "Si se apaga, el GPS deja de dar posiciones y el registro se interrumpe. " +
+    "Lo grabado no se pierde, pero queda un hueco.\n\n" +
+    "Cámbialo a mano en:\n" + ruta + "\n\n" +
+    "Este aviso no volverá a salir.");
+  localStorage.setItem("aviso-pantalla", "1");
+}
+
+/* ---------- sesión en curso, a prueba de cierres ---------- */
+
+const CLAVE_SESION = "__sesion_activa";
+let guardadoPend = null, ultGuardado = 0;
+
+async function guardarSesion(forzar) {
+  if (!grabando && !track.length) return;
+  const ahora = Date.now();
+  if (!forzar && ahora - ultGuardado < 8000) {
+    clearTimeout(guardadoPend);
+    guardadoPend = setTimeout(() => guardarSesion(true), 8000);
+    return;
+  }
+  ultGuardado = ahora;
+  clearTimeout(guardadoPend); guardadoPend = null;
+  try {
+    await dbGuardar({
+      id: CLAVE_SESION, nombre: "Sesión en curso", fecha: tInicio || ahora,
+      marks: S.marks, track, eventos, grabando,
+      ajustes: { upAngle: S.upAngle, downAngle: S.downAngle },
+      resumen: resumenTrack(),
+    });
+  } catch (e) { console.error("sesión", e); }
+}
+
+async function restaurarSesion() {
+  let s = null;
+  try {
+    const d = await abrirDB();
+    s = await new Promise((ok, ko) => {
+      const r = d.transaction("regatas", "readonly").objectStore("regatas").get(CLAVE_SESION);
+      r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error);
+    });
+  } catch (e) { return; }
+  if (!s || !(s.track || []).length) return;
+
+  track = s.track; eventos = s.eventos || []; tInicio = s.fecha;
+  repintarTrack();
+  const r = resumenTrack();
+  const seguir = s.grabando && confirm(
+    `Había una grabación en marcha: ${(r.dist / NM).toFixed(2)} NM en ${fmtHMS(r.dur)}, ` +
+    `${r.puntos} puntos.\n\n¿Continuar grabando sobre ella?`);
+  if (seguir) {
+    grabando = true;
+    $("#btn-rec").classList.add("rec");
+    anotar("reanudar", "La app se reinició y se retomó el registro");
+    pedirWakeLock();
+  }
+  actualizarRec(); render();
+}
+
+/* guardar en cada momento crítico, no solo periódicamente */
+window.addEventListener("pagehide", () => guardarSesion(true));
+window.addEventListener("beforeunload", () => guardarSesion(true));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) guardarSesion(true);
+});
+
+function limpiarSesionGuardada() {
+  dbBorrar(CLAVE_SESION).catch(() => {});
+}
+
+/* =====================================================================
+   Orientación de la carta: norte arriba o proa arriba
+   ===================================================================== */
+
+let rotActual = 0, rotObjetivo = 0, rotTimer = null;
+
+function aplicarRotacion(g) {
+  const cont = map.getContainer();
+  cont.style.transform = g ? `rotate(${-g}deg)` : "";
+  /* etiquetas y marcas se contragiran para seguir legibles */
+  document.documentElement.style.setProperty("--contragiro", `${g}deg`);
+  $("#rosa-mini").style.transform = `rotate(${-g}deg)`;
+  $("#rosa-mini").style.display = g ? "" : "none";
+}
+
+function actualizarRotacion() {
+  if (S.northUp) {
+    if (rotActual !== 0) { rotActual = 0; aplicarRotacion(0); }
+    return;
+  }
+  const h = rumbo();
+  if (h == null) return;
+  rotObjetivo = h;
+  /* interpolación por el camino corto, para que no dé la vuelta entera */
+  const d = n180(rotObjetivo - rotActual);
+  if (Math.abs(d) < 0.4) return;
+  rotActual = n360(rotActual + d * 0.25);
+  aplicarRotacion(rotActual);
+}
+
+/* girado, el lienzo debe ser al menos la diagonal del hueco visible */
+function dimensionarMapa() {
+  const cont = map.getContainer(), wrap = $("#map-wrap");
+  if (S.northUp) {
+    cont.style.width = ""; cont.style.height = "";
+    cont.style.marginLeft = ""; cont.style.marginTop = "";
+  } else {
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    const lado = Math.ceil(Math.hypot(w, h)) + 8;
+    cont.style.width = lado + "px";
+    cont.style.height = lado + "px";
+    cont.style.marginLeft = -lado / 2 + "px";
+    cont.style.marginTop = -lado / 2 + "px";
+  }
+  map.invalidateSize({ animate: false });
+}
+
+function ponerOrientacion(northUp) {
+  S.northUp = northUp;
+  const cont = map.getContainer();
+  cont.classList.toggle("girado", !northUp);
+  if (northUp) {
+    rotActual = 0; aplicarRotacion(0);
+    map.dragging.enable();
+    $("#map-wrap").classList.remove("proa");
+  } else {
+    /* con la carta girada, arrastrar da resultados imprevisibles:
+       en proa arriba el barco manda y la vista lo sigue */
+    map.dragging.disable();
+    S.followBoat = true;
+    $("#btn-follow").classList.add("on");
+    $("#map-wrap").classList.add("proa");
+    if (S.fix) map.panTo([S.fix.lat, S.fix.lon]);
+    rotActual = rumbo() ?? 0;
+    aplicarRotacion(rotActual);
+  }
+  $("#btn-orient").classList.toggle("on", !northUp);
+  $("#btn-orient").innerHTML = northUp ? "Norte" : "Proa";
+  guardar();
+  dimensionarMapa();
+  if (S.fix) map.panTo([S.fix.lat, S.fix.lon], { animate: false });
+  render();
 }
 
 function avanzarSiLlego() {
@@ -2698,6 +2987,7 @@ function render() {
     B.innerHTML = `<div class="bn-t">${tit}</div><div class="bn-s">${sub}</div>`;
   }
 
+  actualizarRotacion();
   pintarSelector();
   pintarBarco();
   pintarLaylines(t);
@@ -2926,6 +3216,8 @@ function initUI() {
     if (S.fix) { S.followBoat = true; $("#btn-follow").classList.add("on"); map.panTo([S.fix.lat, S.fix.lon]); }
   };
   $("#gps-auto").onchange = (e) => { S.gpsAuto = e.target.checked; guardar(); };
+  $("#btn-orient").onclick = () => ponerOrientacion(!S.northUp);
+  $("#orient-sel").onchange = (e) => ponerOrientacion(e.target.value === "norte");
   const pintarCandado = () => {
     $("#btn-lock").classList.toggle("on", S.bloqueado);
     $("#btn-lock").innerHTML = S.bloqueado ? "Fijas" : "Libres";
@@ -2989,6 +3281,15 @@ function initUI() {
   $("#hdg-src").onchange = (e) => { S.hdgSource = e.target.value; guardar(); render(); };
   $("#decl").onchange = (e) => { S.decl = Number(e.target.value) || 0; guardar(); render(); };
   $("#btn-diag").onclick = () => { revisarPermiso(); pintarDiag(); };
+  $("#btn-probar-pant").onclick = async () => {
+    const ok = await pedirWakeLock();
+    pintarDiag();
+    alert(ok
+      ? `Funciona: la pantalla se mantendrá encendida mientras grabas.\nMétodo: ${modoPantalla}.`
+      : "Este navegador no permite mantener la pantalla encendida.\n\n" +
+        "Tendrás que subir el apagado automático a mano mientras dure la regata.");
+    if (!grabando && zero == null) soltarWakeLock();
+  };
   $("#btn-refresh").onclick = async () => {
     if (!confirm("Se borrará la app guardada y se recargará desde el servidor.\n\n" +
       "Las cartas descargadas, las boyas y las regatas NO se tocan.")) return;
@@ -3097,6 +3398,7 @@ function initUI() {
   $("#hdg-src").value = S.hdgSource; $("#decl").value = S.decl;
   $("#auto-adv").checked = S.autoAdvance; $("#arr-rad").value = S.arrivalRadius;
   $("#gps-auto").checked = S.gpsAuto;
+  $("#orient-sel").value = S.northUp ? "norte" : "proa";
 }
 
 /* =====================================================================
@@ -3108,6 +3410,7 @@ registrarSW();
 initMapa();
 initUI();
 pintarMarcas();
+ponerOrientacion(S.northUp !== false);
 render();
 if (S.marks.length) map.fitBounds(S.marks.map((m) => [m.lat, m.lon]), { padding: [60, 60] });
 
@@ -3115,12 +3418,21 @@ medirAlmacenamiento();
 pintarEdadMeteo();
 programarMeteo(1200);                       /* previsión nada más abrir */
 autoArrancarGPS();                          /* posición nada más abrir */
+restaurarSesion();                          /* recuperar grabación interrumpida */
 
-setInterval(() => { tickCrono(); if (panelActivo === "tactica") render(); }, 250);
+setInterval(() => {
+  tickCrono();
+  if (!S.northUp) { actualizarRotacion(); pintarBarco(); }
+  if (panelActivo === "tactica") render();
+}, 250);
 setInterval(pintarEdadMeteo, 30000);        /* refrescar el «hace X min» */
 
 /* disparadores: vuelve la red, vuelves a la app, o cambia el sitio */
 window.addEventListener("online", despertarMeteo);
+window.addEventListener("resize", () => { if (!S.northUp) dimensionarMapa(); });
+window.addEventListener("orientationchange", () => setTimeout(() => {
+  if (!S.northUp) dimensionarMapa();
+}, 250));
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) return;
   if (Date.now() - S.wxAt > 10 * 60 * 1000) despertarMeteo();
