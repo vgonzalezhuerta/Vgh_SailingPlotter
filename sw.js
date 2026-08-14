@@ -3,17 +3,23 @@
    TILES:  cache-first permanente, lo llena el botón «Descargar esta zona»
    CDN:    stale-while-revalidate                                            */
 
-const VER = "v2";
+const VER = "v3";
 const C_APP = `ploter-app-${VER}`;
 const C_TILES = "ploter-tiles";        // sin versión: no se borra al actualizar
 const C_CDN = `ploter-cdn-${VER}`;
 
-const LOCALES = [
+/* imprescindibles: sin esto la app no arranca sin red */
+const NUCLEO = [
   "./",
   "./index.html",
+];
+
+/* deseables: si uno falla, la instalación sigue adelante */
+const EXTRAS = [
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  "./icons/icon-maskable-512.png",
 ];
 
 const CDN = [
@@ -31,7 +37,10 @@ const esCdn = (u) =>
 self.addEventListener("install", (e) => {
   e.waitUntil((async () => {
     const app = await caches.open(C_APP);
-    await app.addAll(LOCALES);                    // crítico: si falla, no instalamos
+    await app.addAll(NUCLEO);                     // crítico: si falla, no instalamos
+    await Promise.all(EXTRAS.map(async (u) => {   // el resto, tolerante a fallos
+      try { await app.add(u); } catch (err) { /* se cacheará en cuanto se use */ }
+    }));
     const cdn = await caches.open(C_CDN);
     await Promise.all(CDN.map(async (u) => {      // opcional: tolerante a fallos
       try { await cdn.add(new Request(u, { mode: "cors", credentials: "omit" })); }

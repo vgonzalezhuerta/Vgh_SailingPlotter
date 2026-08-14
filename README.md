@@ -20,14 +20,41 @@ previsión de viento y rumbos recomendados. Funciona sin cobertura una vez desca
    .nojekyll
    ```
 
+   > **La carpeta se llama `icons`, en minúscula.** GitHub Pages distingue mayúsculas de
+   > minúsculas: si la subes como `Icons/`, los iconos dan 404, el service worker no llega a
+   > instalarse y Android deja de ofrecer la instalación. Es el fallo más fácil de cometer
+   > arrastrando la carpeta desde Windows o macOS.
+
    Se puede hacer desde el navegador: *Add file → Upload files*, arrastrar todo y confirmar.
 3. **Settings → Pages**. En *Source* elige `Deploy from a branch`, rama `main`, carpeta `/ (root)`.
    Guarda.
 4. Espera un par de minutos. La URL será `https://TU-USUARIO.github.io/TU-REPO/`.
 5. Ábrela en el móvil. Concede el permiso de ubicación cuando lo pida.
-6. Menú del navegador → **Añadir a pantalla de inicio**. Se abrirá a pantalla completa.
 
 Al ser HTTPS, el GPS y la brújula ya funcionan.
+
+---
+
+## Instalarla en Android
+
+Con la web ya publicada por HTTPS, es una app instalable de verdad: icono propio, pantalla
+completa sin barra del navegador y arranque sin cobertura.
+
+- **Desde la propia app:** *Ajustes → Instalar en el móvil → Instalar la app*. El botón aparece
+  cuando Chrome confirma que se cumple todo. Si en su lugar pone *usa el menú del navegador*,
+  recarga la página: el navegador la ofrece cuando ha terminado de guardarla.
+- **Desde Chrome:** menú **⋮ → Instalar aplicación** (o *Añadir a pantalla de inicio*).
+- **En iPhone y iPad** no existe el botón: *Compartir → Añadir a pantalla de inicio*.
+
+En *Ajustes → Diagnóstico*, la fila **Instalada como app** dice si estás en la versión instalada
+o dentro del navegador.
+
+Manteniendo pulsado el icono salen dos accesos directos: **Boyas** (recorrido) y **Cartas**
+(descarga sin conexión).
+
+Requisitos que ya cumple el repo, por si tocas algo: HTTPS, `manifest.webmanifest` enlazado desde
+el `<head>`, iconos de 192 y 512 accesibles, `display: standalone` y un service worker que sirve
+la página sin red.
 
 ---
 

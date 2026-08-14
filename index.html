@@ -8,8 +8,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Plóter de regata</title>
 <link rel="manifest" href="./manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="Plóter">
+<meta name="apple-mobile-web-app-title" content="Plóter">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -704,6 +709,13 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
         el viento a mano. El barco genera además viento aparente falso, así que se ejercita el mismo
         cálculo que con la veleta real conectada.</p>
     </div>
+    <div class="blk" id="blk-instalar">
+      <h4>Instalar en el móvil</h4>
+      <div class="row"><span>Estado</span><b id="inst-estado">—</b></div>
+      <button class="btn p" id="btn-instalar" style="margin-top:10px;display:none">Instalar la app</button>
+      <p class="hint" id="inst-ayuda">Instalada se abre a pantalla completa, sin barra del navegador,
+        con su icono en el cajón de aplicaciones y arrancando aunque no haya cobertura.</p>
+    </div>
     <div class="blk">
       <h4>Cartas sin conexión</h4>
       <div class="g2">
@@ -1211,6 +1223,8 @@ function diagnostico() {
   d.push(["API de geolocalización", navigator.geolocation ? "disponible" : "ausente"]);
   d.push(["Orientación del dispositivo", "DeviceOrientationEvent" in window ? "disponible" : "ausente"]);
   d.push(["Permiso de ubicación", permisoGeo]);
+  d.push(["Instalada como app", enModoApp() ? "sí" : "no — corre en el navegador",
+    enModoApp() ? "stbd" : ""]);
   d.push(["Arranque automático", S.gpsAuto ? "activado" : "desactivado"]);
   d.push(["API de bloqueo de pantalla", soportaWakeLock() ? "disponible" : "ausente (se usa el vídeo)"]);
   d.push(["Pantalla ahora", pantallaActiva() ? modoPantalla : "sin bloquear",
@@ -2425,6 +2439,87 @@ async function borrarCartas() {
   medirAlmacenamiento();
 }
 
+/* =====================================================================
+   Instalación en la pantalla de inicio
+   ---------------------------------------------------------------------
+   Android/Chrome dispara beforeinstallprompt cuando la app cumple los
+   requisitos (https, manifest con iconos de 192 y 512, service worker que
+   responde sin red). Lo guardamos para poder ofrecer el botón nosotros en
+   vez de depender de que el usuario encuentre el menú del navegador.
+   ===================================================================== */
+
+let promptInstalar = null;
+let instaladaYa = false;
+
+const enModoApp = () =>
+  ["standalone", "minimal-ui", "fullscreen"].some((m) =>
+    window.matchMedia?.(`(display-mode: ${m})`)?.matches) ||
+  navigator.standalone === true;
+
+const esIOS = () =>
+  /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+function pintarInstalacion() {
+  const est = $("#inst-estado"), btn = $("#btn-instalar"), ayuda = $("#inst-ayuda");
+  if (!est) return;
+  const base = "Instalada se abre a pantalla completa, sin barra del navegador, con su icono " +
+    "en el cajón de aplicaciones y arrancando aunque no haya cobertura.";
+
+  if (enModoApp() || instaladaYa) {
+    est.textContent = "instalada"; est.className = "stbd";
+    btn.style.display = "none";
+    ayuda.textContent = enModoApp()
+      ? "Ya la estás usando instalada. " + base
+      : "Ya está instalada: búscala en el cajón de aplicaciones. " + base;
+    return;
+  }
+  if (promptInstalar) {
+    est.textContent = "lista para instalar"; est.className = "brass";
+    btn.style.display = ""; btn.textContent = "Instalar la app";
+    ayuda.textContent = base;
+    return;
+  }
+  btn.style.display = "none";
+  if (esIOS()) {
+    est.textContent = "a mano desde Safari"; est.className = "";
+    ayuda.textContent = "En iPhone y iPad no hay botón: Compartir → Añadir a pantalla de inicio. " + base;
+    return;
+  }
+  if (!window.isSecureContext) {
+    est.textContent = "requiere https"; est.className = "port";
+    ayuda.textContent = "Sirve la app por https (GitHub Pages sirve). Por http o file:// el " +
+      "navegador no deja instalarla, ni da GPS ni brújula.";
+    return;
+  }
+  est.textContent = "usa el menú del navegador"; est.className = "";
+  ayuda.textContent = "Menú de Chrome (⋮) → Añadir a pantalla de inicio / Instalar aplicación. " +
+    "Si no aparece, recarga: el navegador la ofrece cuando termina de guardar la app. " + base;
+}
+
+async function lanzarInstalacion() {
+  if (!promptInstalar) return;
+  const p = promptInstalar;
+  promptInstalar = null;                 // el evento solo se puede usar una vez
+  try {
+    p.prompt();
+    const { outcome } = await p.userChoice;
+    if (outcome !== "accepted") promptInstalar = p;   // rechazada: seguirá disponible
+  } catch (e) { promptInstalar = p; }
+  pintarInstalacion();
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();                    // sin esto Chrome enseña su propia barra
+  promptInstalar = e;
+  pintarInstalacion();
+});
+window.addEventListener("appinstalled", () => {
+  instaladaYa = true; promptInstalar = null;
+  pintarInstalacion();
+  if (panelActivo === "ajustes") pintarDiag();
+});
+
 /* ---------- service worker ---------- */
 function registrarSW() {
   if (!("serviceWorker" in navigator)) { estado("off", "sin soporte", false); return; }
@@ -3211,7 +3306,7 @@ function abrirPanel(id) {
     }
     try { pintarManual($("#glos-buscar").value || ""); } catch (e) { console.error("glosario", e); }
   }
-  if (panelActivo === "ajustes") { pintarDiag(); revisarPermiso(); estimarMosaicos(); medirAlmacenamiento(); }
+  if (panelActivo === "ajustes") { pintarDiag(); revisarPermiso(); estimarMosaicos(); medirAlmacenamiento(); pintarInstalacion(); }
 }
 
 function initUI() {
@@ -3314,7 +3409,8 @@ function initUI() {
   /* rumbo */
   $("#hdg-src").onchange = (e) => { S.hdgSource = e.target.value; guardar(); render(); };
   $("#decl").onchange = (e) => { S.decl = Number(e.target.value) || 0; guardar(); render(); };
-  $("#btn-diag").onclick = () => { revisarPermiso(); pintarDiag(); };
+  $("#btn-diag").onclick = () => { revisarPermiso(); pintarDiag(); pintarInstalacion(); };
+  $("#btn-instalar").onclick = lanzarInstalacion;
   $("#btn-probar-pant").onclick = async () => {
     const ok = await pedirWakeLock();
     pintarDiag();
@@ -3447,6 +3543,12 @@ pintarMarcas();
 ponerOrientacion(S.northUp !== false);
 render();
 if (S.marks.length) map.fitBounds(S.marks.map((m) => [m.lat, m.lon]), { padding: [60, 60] });
+
+/* accesos directos del icono de la app: ./?panel=marcas */
+{
+  const p = new URLSearchParams(location.search).get("panel");
+  if (p && TITULOS[p]) abrirPanel(p);
+}
 
 medirAlmacenamiento();
 pintarEdadMeteo();
