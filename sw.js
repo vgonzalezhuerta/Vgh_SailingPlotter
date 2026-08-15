@@ -3,7 +3,7 @@
    TILES:  cache-first permanente, lo llena el botón «Descargar esta zona»
    CDN:    stale-while-revalidate                                            */
 
-const VER = "v5";
+const VER = "v6";
 const C_APP = `ploter-app-${VER}`;
 const C_TILES = "ploter-tiles";        // sin versión: no se borra al actualizar
 const C_CDN = `ploter-cdn-${VER}`;
