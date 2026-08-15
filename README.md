@@ -157,3 +157,27 @@ Sube el `index.html` nuevo al repo. La próxima vez que la abras te preguntará 
 con la versión nueva. Las cartas descargadas no se borran al actualizar.
 
 Si algo se queda pillado: Ajustes del navegador → borrar datos del sitio, y vuelve a entrar.
+
+Cuando cambies `sw.js` o los iconos, sube el número de `VER` dentro de `sw.js`. Si no, el navegador
+sigue sirviendo lo que tenía guardado y no notarás el cambio.
+
+---
+
+## Los iconos
+
+Salen de una foto de un barco frente a la costa, en `iconos-fuente/barco.jpg`. Para regenerarlos:
+
+```
+pip install Pillow
+python3 iconos-fuente/generar-iconos.py
+```
+
+Escribe los tres PNG en `icons/`. El script lleva dentro, comentado, el porqué del encuadre: dónde
+está medido el barco, cuál es la mayor ventana de mar limpio a su alrededor y por qué el maskable
+usa un recorte más ancho que los demás.
+
+Esa carpeta no forma parte de la app: no se descarga ni hace falta para que funcione. Si cambias la
+foto, mide el barco en la nueva y ajusta las constantes de arriba del script.
+
+Aviso: **Android tarda en refrescar el icono** de una app ya instalada. Si sigues viendo el
+anterior, quítala de la pantalla de inicio y vuelve a instalarla.
