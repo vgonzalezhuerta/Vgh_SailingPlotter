@@ -107,6 +107,27 @@ code{font-family:var(--mono);font-size:11px;color:var(--brass)}
   font-family:var(--disp);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
   color:var(--mist);line-height:1.05;padding:2px}
 #tools button.on{background:var(--brass);color:#12212A;border-color:var(--brass)}
+/* en pantallas cortas la columna se comía el HUD: se parte en dos y los
+   botones siguen midiendo 44 px, que es lo mínimo para acertar con el pulgar */
+@media (max-height:780px){ #tools{grid-template-columns:repeat(2,44px)} }
+
+/* ---------- modo bolsillo ---------- */
+/* Negro absoluto: en OLED los píxeles quedan apagados y el gasto se desploma.
+   Por encima de todo, incluido el editor y las pestañas. */
+#bolsillo{position:absolute;inset:0;z-index:1000;background:#000;display:none;
+  touch-action:none;-webkit-user-select:none;user-select:none}
+#bolsillo.on{display:block}
+#bolsillo .pista{position:absolute;left:0;right:0;
+  bottom:calc(30px + env(safe-area-inset-bottom));text-align:center;
+  font-family:var(--disp);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:#24363D;transition:opacity 1.4s ease;pointer-events:none}
+#bolsillo.quieto .pista{opacity:0}
+#bolsillo .pulso{position:absolute;right:18px;
+  bottom:calc(18px + env(safe-area-inset-bottom));
+  width:7px;height:7px;border-radius:99px;background:var(--stbd);
+  animation:latido 3.4s ease-in-out infinite;pointer-events:none}
+@keyframes latido{0%,100%{opacity:.06} 50%{opacity:.32}}
+@media (prefers-reduced-motion:reduce){#bolsillo .pulso{animation:none;opacity:.18}}
 
 /* ---------- marcas y barco ---------- */
 .mk{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:5px;
@@ -377,6 +398,12 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
   <button id="btn-lock">Fijas</button>
   <button id="btn-orient" title="Norte arriba o proa arriba">Norte</button>
   <button id="btn-rec" title="Registrar la derrota">REC</button>
+  <button id="btn-bolsillo" title="Pantalla en negro para guardar el móvil sin parar el registro">Bolsi</button>
+</div>
+
+<div id="bolsillo">
+  <div class="pulso"></div>
+  <div class="pista">Desliza hacia abajo para salir</div>
 </div>
 
 <div id="marksel" style="display:none">
@@ -516,9 +543,16 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
           <button class="btn p" id="btn-grabar">Empezar a registrar</button>
           <button class="btn" id="btn-evento">Marcar momento</button>
         </div>
+        <button class="btn" id="btn-bolsillo2" style="margin-top:9px">Modo bolsillo</button>
         <button class="btn d" id="btn-limpiar" style="margin-top:9px">Descartar derrota</button>
         <p class="hint">La derrota se pinta con el color de la amura: verde estribor, rojo babor.
           La salida del cronómetro y cada paso de boya quedan anotados solos.</p>
+        <p class="hint"><b>Modo bolsillo:</b> deja la pantalla encendida pero en negro y sorda al
+          tacto, para guardarte el móvil sin cortar el registro. El GPS sigue grabando y los pasos
+          de boya siguen sonando. Se sale deslizando hacia abajo. Con la pantalla <i>apagada</i> no
+          se puede grabar: el navegador deja de dar posiciones, así que baja el brillo al mínimo y
+          usa esto. En pantallas OLED el negro casi no gasta; en LCD la retroiluminación sigue
+          encendida y se ahorra menos.</p>
       </div>
       <div class="blk">
         <h4>Guardar esta regata</h4>
@@ -768,7 +802,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
    PLÓTER DE REGATA — núcleo
    ===================================================================== */
 
-const VERSION = "2026-08-13 · 14";
+const VERSION = "2026-08-15 · 15";
 const NM = 1852;
 const KN = 1.94384;                       // m/s -> nudos
 const R_EARTH = 6371000;
@@ -1293,7 +1327,7 @@ function iniciarGPS() {
       estado("gps", `±${Math.round(p.coords.accuracy)} m`, true);
       if (!S.wxAt) despertarMeteo();
       registrarPunto();
-      if (S.followBoat && !mapCentrado) { map.setView([S.fix.lat, S.fix.lon], 15); mapCentrado = true; }
+      if (S.followBoat && !mapCentrado && !enBolsillo) { map.setView([S.fix.lat, S.fix.lon], 15); mapCentrado = true; }
       render();
     },
     (e) => {
@@ -1630,6 +1664,28 @@ function amuraDe(p) {
 }
 const COL_AMURA = { s: "#3FCB7D", p: "#E24B4B", n: "#87A8B3" };
 
+/* Un hueco es un tramo sin posiciones: pantalla apagada, app en segundo plano,
+   el sistema congelando la pestaña o el GPS sin cobertura. No se puede evitar
+   siempre, pero sí dejar constancia en vez de coser una recta que finge una
+   bordada que nunca existió. */
+const HUECO_MS = 45000;
+let huecoAvisado = false;              // ya anotado el hueco en curso, no se duplica
+
+function anotarHueco(ms, t) {
+  eventos.push({ t, tipo: "hueco", texto: `Interrupción de ${fmtHMS(ms / 1000)}: sin posiciones` });
+  guardarSesion(true);
+  if (panelActivo === "marcas") actualizarRec();
+}
+
+/* al volver a la app se ve el corte sin esperar al siguiente fix */
+function revisarHueco() {
+  if (!grabando || huecoAvisado || !track.length) return;
+  const ms = Date.now() - track[track.length - 1].t;
+  if (ms <= HUECO_MS) return;
+  huecoAvisado = true;
+  anotarHueco(ms, Date.now());
+}
+
 function registrarPunto() {
   if (!grabando || !S.fix) return;
   const w = vientoReal();
@@ -1640,23 +1696,31 @@ function registrarPunto() {
   };
   const ult = track[track.length - 1];
   if (ult) {
-    const dt = (p.t - ult.t) / 1000;
-    if (dt > 45) {
-      eventos.push({ t: p.t, tipo: "hueco",
-        texto: `Interrupción de ${fmtHMS(dt)}: sin posiciones` });
+    const ms = p.t - ult.t;
+    if (ms > HUECO_MS) {
+      if (!huecoAvisado) anotarHueco(ms, p.t);
+      p.hueco = ms;                                 // marca el corte para traza y GPX
     }
-    if (dt < 1) return;
-    if (dt < 5 && distM(ult, p) < 1.5) return;      // fondeado: no engordamos el archivo
+    if (ms < 1000) return;
+    if (ms < 5000 && distM(ult, p) < 1.5) return;   // fondeado: no engordamos el archivo
   }
+  huecoAvisado = false;
   track.push(p);
   pintarSegmento(p, ult);
-  guardarSesion(false);
+  guardarSesion(p.hueco ? true : false);
   if (panelActivo === "marcas") actualizarRec();
 }
 
 function pintarSegmento(p, ult) {
   if (!trackGrupo) trackGrupo = L.layerGroup().addTo(map);
   if (!ult) return;
+  if (p.hueco) {
+    /* discontinua y gris: por ahí no sabemos por dónde fue el barco */
+    L.polyline([[ult.lat, ult.lon], [p.lat, p.lon]],
+      { color: COL_AMURA.n, weight: 2, opacity: .45, dashArray: "4,8" }).addTo(trackGrupo);
+    segmentos.push({ amura: null, linea: null });    // corta la racha de la amura anterior
+    return;
+  }
   const a = amuraDe(p);
   const ultimo = segmentos[segmentos.length - 1];
   if (ultimo && ultimo.amura === a) ultimo.linea.addLatLng([p.lat, p.lon]);
@@ -1681,9 +1745,12 @@ function anotar(tipo, texto) {
 }
 
 function resumenTrack(tk = track, ev = eventos) {
-  if (tk.length < 2) return { dist: 0, dur: 0, vMax: 0, vMed: 0, viradas: 0, puntos: tk.length };
+  if (tk.length < 2) return { dist: 0, dur: 0, vMax: 0, vMed: 0, viradas: 0, puntos: tk.length,
+    huecos: 0, tHuecos: 0 };
   let dist = 0, vMax = 0, viradas = 0, ultAmura = null, tUltVirada = 0;
+  let huecos = 0, tHuecos = 0;
   for (let i = 1; i < tk.length; i++) {
+    if (tk[i].hueco) { huecos++; tHuecos += tk[i].hueco; }
     dist += distM(tk[i - 1], tk[i]);
     if (tk[i].sog != null) vMax = Math.max(vMax, tk[i].sog);
     const a = amuraDe(tk[i]);
@@ -1698,7 +1765,7 @@ function resumenTrack(tk = track, ev = eventos) {
   return {
     dist, dur, vMax, viradas, puntos: tk.length,
     vMed: dur > 0 ? (dist / NM) / (dur / 3600) : 0,
-    eventos: ev.length,
+    eventos: ev.length, huecos, tHuecos,
   };
 }
 
@@ -1722,7 +1789,7 @@ function toggleGrabar() {
 
 function limpiarTrack() {
   if (track.length && !confirm("¿Descartar la derrota registrada sin guardarla?")) return;
-  track = []; eventos = []; tInicio = null; grabando = false;
+  track = []; eventos = []; tInicio = null; grabando = false; huecoAvisado = false;
   soltarWakeLock(); limpiarSesionGuardada();
   $("#btn-rec").classList.remove("rec");
   if (trackGrupo) trackGrupo.clearLayers();
@@ -1818,19 +1885,29 @@ function aGPX(r) {
   const wpts = (r.marks || []).map((m) =>
     `  <wpt lat="${m.lat.toFixed(7)}" lon="${m.lon.toFixed(7)}">\n` +
     `    <name>${esc(m.name)}</name>\n    <type>${esc(ROLES[m.role]?.label || m.role)}</type>\n  </wpt>`).join("\n");
-  const pts = (r.track || []).map((p) =>
+  const pto = (p) =>
     `      <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}">\n` +
     `        <time>${iso(p.t)}</time>\n` +
     (p.cog != null ? `        <course>${p.cog.toFixed(1)}</course>\n` : "") +
     (p.sog != null ? `        <speed>${(p.sog / KN).toFixed(2)}</speed>\n` : "") +
-    `      </trkpt>`).join("\n");
+    `      </trkpt>`;
+  /* cada interrupción abre un <trkseg> nuevo: así ningún programa une los dos
+     extremos con una recta inventada, que es lo que significa un segmento GPX */
+  const tramos = [];
+  for (const p of (r.track || [])) {
+    if (p.hueco && tramos.length && tramos[tramos.length - 1].length) tramos.push([]);
+    if (!tramos.length) tramos.push([]);
+    tramos[tramos.length - 1].push(p);
+  }
+  const segs = tramos.filter((t) => t.length)
+    .map((t) => `    <trkseg>\n${t.map(pto).join("\n")}\n    </trkseg>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Plóter de regata" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata><name>${esc(r.nombre)}</name><time>${iso(r.fecha)}</time></metadata>
 ${wpts}
-  <trk><name>${esc(r.nombre)}</name><trkseg>
-${pts}
-  </trkseg></trk>
+  <trk><name>${esc(r.nombre)}</name>
+${segs}
+  </trk>
 </gpx>`;
 }
 
@@ -1862,7 +1939,8 @@ async function pintarBiblioteca() {
         <b>${r.nombre}</b>
         <span>${new Date(r.fecha).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
           · ${(r.marks || []).length} boyas
-          ${s.dist ? `· ${(s.dist / NM).toFixed(1)} NM · ${fmtHMS(s.dur)} · ${s.viradas} viradas` : "· sin derrota"}</span>
+          ${s.dist ? `· ${(s.dist / NM).toFixed(1)} NM · ${fmtHMS(s.dur)} · ${s.viradas} viradas` : "· sin derrota"}
+          ${s.huecos ? `· ${s.huecos} interrupcion${s.huecos > 1 ? "es" : ""}` : ""}</span>
       </div>
       <div class="rgbtns">
         <button data-load="${r.id}">Cargar</button>
@@ -1890,7 +1968,10 @@ function actualizarRec() {
     `<div class="row"><span>Distancia navegada</span><b>${(s.dist / NM).toFixed(2)} NM</b></div>` +
     `<div class="row"><span>Velocidad media / máxima</span><b>${s.vMed.toFixed(1)} / ${s.vMax.toFixed(1)} kn</b></div>` +
     `<div class="row"><span>Viradas y trasluchadas</span><b>${s.viradas}</b></div>` +
-    `<div class="row"><span>Puntos y eventos</span><b>${s.puntos} · ${eventos.length}</b></div>`;
+    `<div class="row"><span>Puntos y eventos</span><b>${s.puntos} · ${eventos.length}</b></div>` +
+    (s.huecos
+      ? `<div class="row"><span>Interrupciones</span><b class="port">${s.huecos} · ${fmtHMS(s.tHuecos / 1000)} sin datos</b></div>`
+      : "");
   $("#btn-grabar").textContent = grabando ? "Pausar registro" : (track.length ? "Reanudar" : "Empezar a registrar");
   pintarPantalla();
 }
@@ -2857,12 +2938,72 @@ function pintarPantalla() {
 
 /* el sistema lo suelta al ocultar la app: hay que volver a pedirlo */
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && (grabando || zero != null)) pedirWakeLock();
+  if (document.hidden) return;
+  if (grabando || zero != null) pedirWakeLock();
+  revisarHueco();                 /* si estuvimos fuera, que quede anotado ya */
 });
 /* y comprobarlo de vez en cuando, por si se soltó en silencio */
 setInterval(() => {
   if ((grabando || zero != null) && !document.hidden && !pantallaActiva()) pedirWakeLock();
 }, 20000);
+
+/* =====================================================================
+   Modo bolsillo
+   ---------------------------------------------------------------------
+   Con la pantalla apagada no hay grabación posible: el navegador deja de
+   entregar posiciones y acaba congelando la página, y el service worker
+   no tiene acceso al GPS, así que tampoco se le puede delegar.
+   Lo que sí se puede es dejar la pantalla encendida —el bloqueo de
+   pantalla ya lo estamos pidiendo— y ponerla completamente en negro,
+   sorda al tacto y sin dibujar la carta. En OLED los píxeles negros
+   quedan apagados y el gasto se va casi todo al GPS.
+   ===================================================================== */
+
+let enBolsillo = false;
+let tmrPista = null;
+
+function pistaBolsillo() {
+  const b = $("#bolsillo");
+  b.classList.remove("quieto");
+  clearTimeout(tmrPista);
+  tmrPista = setTimeout(() => b.classList.add("quieto"), 4000);
+}
+
+function entrarBolsillo() {
+  if (enBolsillo) return;
+  enBolsillo = true;
+  if (panelActivo) abrirPanel(panelActivo);        // cierra la hoja que hubiera abierta
+  $("#bolsillo").classList.add("on");
+  pistaBolsillo();
+  pedirWakeLock().then((ok) => { if (!ok) avisoPantalla(); });
+  guardarSesion(true);                             // por si el sistema nos mata ahí dentro
+}
+
+function salirBolsillo() {
+  if (!enBolsillo) return;
+  enBolsillo = false;
+  clearTimeout(tmrPista);
+  $("#bolsillo").classList.remove("on", "quieto");
+  if (!S.northUp) dimensionarMapa();               // la carta girada se redimensiona sola
+  revisarHueco();                                  // por si el sistema nos congeló ahí dentro
+  render();
+  actualizarRec();
+}
+
+/* Salir pide un gesto largo y deliberado: media pantalla hacia abajo.
+   Cualquier otro toque se traga, que para eso está guardado en el bolsillo. */
+{
+  const b = $("#bolsillo");
+  let y0 = null;
+  b.addEventListener("pointerdown", (e) => { y0 = e.clientY; pistaBolsillo(); });
+  b.addEventListener("pointermove", (e) => e.preventDefault(), { passive: false });
+  b.addEventListener("pointerup", (e) => {
+    if (y0 != null && e.clientY - y0 > window.innerHeight * 0.4) salirBolsillo();
+    y0 = null;
+  });
+  b.addEventListener("pointercancel", () => { y0 = null; });
+  b.addEventListener("contextmenu", (e) => e.preventDefault());
+}
 
 /* ---------- aviso la primera vez ---------- */
 
@@ -2928,6 +3069,7 @@ async function restaurarSesion() {
   if (seguir) {
     grabando = true;
     $("#btn-rec").classList.add("rec");
+    revisarHueco();               /* cuánto tiempo estuvo caída, antes que nada */
     anotar("reanudar", "La app se reinició y se retomó el registro");
     pedirWakeLock();
   }
@@ -3074,6 +3216,9 @@ function estado(k, txt, ok) {
 }
 
 function render() {
+  /* en el bolsillo no se dibuja nada, pero el recorrido sigue avanzando solo */
+  if (enBolsillo) { avanzarSiLlego(); return; }
+
   const t = tactica();
   const w = t.w;
 
@@ -3435,6 +3580,8 @@ function initUI() {
   /* registro y biblioteca */
   $("#btn-rec").onclick = toggleGrabar;
   $("#btn-grabar").onclick = toggleGrabar;
+  $("#btn-bolsillo").onclick = entrarBolsillo;
+  $("#btn-bolsillo2").onclick = entrarBolsillo;
   $("#btn-evento").onclick = () => {
     const t = prompt("Nota para este momento:", "");
     if (t) { if (!grabando) { grabando = true; $("#btn-rec").classList.add("rec"); } anotar("nota", t); }
@@ -3558,6 +3705,7 @@ restaurarSesion();                          /* recuperar grabación interrumpida
 
 setInterval(() => {
   tickCrono();
+  if (enBolsillo) return;                   /* ni girar la carta ni repintar el barco */
   if (!S.northUp) { actualizarRotacion(); pintarBarco(); }
   if (panelActivo === "tactica") render();
 }, 250);

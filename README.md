@@ -98,6 +98,40 @@ Si solo publicas viento aparente, el viento real se calcula con el rumbo y la ve
 
 ---
 
+## Grabar con el móvil guardado
+
+**Con la pantalla apagada no se puede grabar.** No es una carencia de la app: el navegador deja de
+entregar posiciones cuando la pantalla se apaga, congela la página al pasar a segundo plano, y el
+service worker no tiene acceso al GPS, así que tampoco se le puede delegar. Ninguna web puede
+hacerlo; haría falta una app nativa.
+
+Lo que sí se puede es el **modo bolsillo**: botón *Bolsi* sobre la carta, o *Regata → Registro de la
+derrota → Modo bolsillo*. La pantalla se queda encendida pero **completamente en negro y sorda al
+tacto**, así que puedes guardarte el móvil sin que el muslo pare la grabación. Por dentro sigue todo:
+GPS grabando, cronómetro corriendo y los pasos de boya sonando. No se dibuja la carta, que es lo que
+consume.
+
+Se sale **deslizando media pantalla hacia abajo**. Un toque suelto no vale, a propósito.
+
+Baja el brillo al mínimo antes de guardarlo. En pantallas **OLED** el negro apaga los píxeles y el
+gasto se va casi todo al GPS; en **LCD** la retroiluminación sigue encendida y se ahorra bastante
+menos.
+
+### Interrupciones
+
+Si aun así se corta el registro —pantalla apagada, la app al fondo, el sistema matando la pestaña o
+el GPS sin señal—, el hueco **queda anotado** en vez de disimularse:
+
+- En la carta el tramo sale en **gris discontinuo**, no como una bordada más: por ahí no se sabe por
+  dónde fue el barco.
+- El resumen de la derrota cuenta las interrupciones y el tiempo total sin datos.
+- En el **GPX** cada corte abre un `<trkseg>` nuevo, que es justo lo que significa un segmento en ese
+  formato, así que ningún programa unirá los extremos con una recta inventada.
+
+Se considera interrupción cualquier tramo de más de 45 segundos sin posiciones.
+
+---
+
 ## Detalles que conviene saber
 
 **Rumbo del barco.** Se toma en cascada: compás por MQTT, brújula del móvil, y rumbo sobre el fondo
