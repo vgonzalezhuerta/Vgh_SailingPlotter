@@ -139,6 +139,11 @@ del GPS. El chip HDG indica cuál está en uso y en Ajustes puedes fijar una fue
 declinación magnética. La brújula del móvil se desvía con los hierros del barco; navegando por
 encima de nudo y medio, el COG suele ser más fiable.
 
+**Dirección del viento.** Los grados son siempre de **dónde viene**, como en toda la náutica y como
+los sirve Open-Meteo: 180° es viento del sur. Las flechas, en cambio, apuntan **hacia dónde sopla**,
+como en cualquier mapa del tiempo, así que con viento del sur la flecha sube hacia el norte. Para
+que no haya duda, junto a los grados va el rumbo en letras: `178° S`, y bajo el HUD, `del S`.
+
 **Laylines.** Se trazan con dos ángulos fijos, el TWA de ceñida y el de empopada, configurables en
 Táctica. No son polares reales: si tienes la tabla de tu barco, ahí es donde más se gana.
 

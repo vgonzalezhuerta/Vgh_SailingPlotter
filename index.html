@@ -374,7 +374,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
           <path d="M13 2 L13 22 M13 22 L9 17 M13 22 L17 17" stroke="#E8B04B" stroke-width="2.2"
             fill="none" stroke-linecap="round"/></svg>
       </div>
-      <span class="lab">Viento</span><span class="val" id="hud-twd">---°</span>
+      <span class="lab">Viento de</span><span class="val" id="hud-twd">---°</span>
     </div>
     <div class="cell wind"><span class="lab">Int. kn</span><span class="val" id="hud-tws">—</span></div>
     <div class="cell"><span class="lab">TWA</span><span class="val" id="hud-twa">---</span></div>
@@ -613,7 +613,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
     <div class="blk">
       <h4>Viento manual</h4>
       <div class="g2">
-        <div><label class="f" for="man-twd">Dirección °</label><input id="man-twd" type="number" inputmode="numeric"></div>
+        <div><label class="f" for="man-twd">Viene del ° <span id="man-card"></span></label><input id="man-twd" type="number" inputmode="numeric"></div>
         <div><label class="f" for="man-tws">Intensidad kn</label><input id="man-tws" type="number" inputmode="numeric"></div>
       </div>
       <p class="hint">Se usa solo si no hay sensor ni previsión. Prioridad: TWD del sensor →
@@ -802,7 +802,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
    PLÓTER DE REGATA — núcleo
    ===================================================================== */
 
-const VERSION = "2026-08-15 · 17";
+const VERSION = "2026-08-15 · 18";
 const NM = 1852;
 const KN = 1.94384;                       // m/s -> nudos
 const R_EARTH = 6371000;
@@ -815,6 +815,11 @@ const n360 = (d) => ((d % 360) + 360) % 360;
 const n180 = (d) => { const x = n360(d); return x > 180 ? x - 360 : x; };
 const pad2 = (n) => String(n).padStart(2, "0");
 const pad3 = (n) => String(Math.round(n360(n))).padStart(3, "0");
+/* El rumbo en letras quita toda ambigüedad: «178°» se puede leer del revés,
+   «178° S» no. Rosa de 16 rumbos, en castellano (O de Oeste). */
+const ROSA = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+              "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO"];
+const cardinal = (g) => ROSA[Math.round(n360(g) / 22.5) % 16];
 const uid = () => Math.random().toString(36).slice(2, 9);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -3224,14 +3229,19 @@ function render() {
 
   $("#hud-twd").textContent = pad3(w.twd) + "°";
   $("#hud-tws").textContent = w.tws != null ? w.tws.toFixed(1) : "—";
-  $("#hud-src").textContent = w.src;
+  $("#hud-src").textContent = `${w.src} · del ${cardinal(w.twd)}`;
   const h = rumbo();
   $("#hud-hdg").textContent = h == null ? "---" : pad3(h) + "°";
   $("#hud-sog").textContent = (S.fix?.sog ?? S.sensors.sog) != null
     ? (S.fix?.sog ?? S.sensors.sog).toFixed(1) : "—";
   $("#hud-twa").textContent = h == null ? "---" : Math.round(Math.abs(n180(h - w.twd))) + "°";
   estado("hdg", S.hdgUsada, h != null);
-  $("#wind-arrow").style.transform = `rotate(${w.twd + 180}deg)`;
+  /* La flecha del SVG nace apuntando abajo, o sea al 180. Girándola el valor
+     del TWD acaba apuntando a twd+180, que es HACIA DONDE SOPLA el viento,
+     la convención de cualquier mapa meteorológico. Antes se le sumaba 180 y
+     apuntaba al origen del viento: con viento del sur la flecha caía hacia
+     abajo y se leía justo al revés. */
+  $("#wind-arrow").style.transform = `rotate(${w.twd}deg)`;
 
   /* banner de recomendación */
   const B = $("#banner");
@@ -3360,7 +3370,7 @@ function pintarViento() {
     <div class="wxnow">
       <div><span class="lab">Viento</span><b>${n.spd.toFixed(0)} kn</b></div>
       <div><span class="lab">Racha</span><b>${n.gust.toFixed(0)} kn</b></div>
-      <div><span class="lab">Dirección</span><b>${pad3(n.dir)}°</b></div>
+      <div><span class="lab">Viene del</span><b>${pad3(n.dir)}° ${cardinal(n.dir)}</b></div>
       <div><span class="lab">Temp.</span><b>${n.temp.toFixed(0)}°</b></div>
       <div><span class="lab">Presión</span><b>${n.pres.toFixed(0)}</b></div>
     </div>
@@ -3368,12 +3378,15 @@ function pintarViento() {
       ${S.wx.horas.map((h) => `
         <div class="wxh">
           <span class="hh">${new Date(h.t).getHours()}h</span>
-          <svg width="22" height="22" viewBox="0 0 22 22" style="transform:rotate(${h.dir + 180}deg)">
+          <svg width="22" height="22" viewBox="0 0 22 22" style="transform:rotate(${h.dir}deg)">
             <path d="M11 3 L11 19 M11 19 L7 14 M11 19 L15 14" stroke="#E8B04B" stroke-width="2"
               fill="none" stroke-linecap="round"/></svg>
           <b>${h.spd.toFixed(0)}</b><span class="g">${h.gust.toFixed(0)}</span>
         </div>`).join("")}
     </div>
+    <p class="hint">Los grados son de <b>dónde viene</b> el viento, como en toda la náutica:
+      180° es viento del sur. Las flechas, en cambio, apuntan <b>hacia dónde sopla</b>, como en
+      cualquier mapa del tiempo: con viento del sur la flecha sube hacia el norte.</p>
     <p class="hint">Datos horarios de Open-Meteo en el centro del recorrido
       (${S.wx.lugar.lat.toFixed(3)}, ${S.wx.lugar.lon.toFixed(3)}). Nudos a 10 m.</p>`;
 }
@@ -3520,7 +3533,11 @@ function initUI() {
 
   $("#up-ang").onchange = (e) => { S.upAngle = clamp(+e.target.value || 42, 25, 60); guardar(); render(); };
   $("#dn-ang").onchange = (e) => { S.downAngle = clamp(+e.target.value || 150, 120, 180); guardar(); render(); };
-  $("#man-twd").onchange = (e) => { S.manualTwd = n360(+e.target.value || 0); guardar(); render(); };
+  $("#man-twd").onchange = (e) => {
+    S.manualTwd = n360(+e.target.value || 0);
+    $("#man-card").textContent = "· " + cardinal(S.manualTwd);
+    guardar(); render();
+  };
   $("#man-tws").onchange = (e) => { S.manualTws = +e.target.value || 0; guardar(); render(); };
   $("#basemap").onchange = (e) => { S.basemap = e.target.value; guardar(); ponerBase(); };
   $("#seamark").onchange = (e) => { S.seamark = e.target.checked; guardar(); ponerBase(); };
@@ -3671,6 +3688,7 @@ function initUI() {
   $("#mq-pass").value = S.mqtt.pass; $("#mq-sniff").value = S.mqtt.sniff;
   $("#up-ang").value = S.upAngle; $("#dn-ang").value = S.downAngle;
   $("#man-twd").value = S.manualTwd; $("#man-tws").value = S.manualTws;
+  $("#man-card").textContent = "· " + cardinal(S.manualTwd);
   $("#basemap").value = S.basemap; $("#seamark").checked = S.seamark;
   $("#hdg-src").value = S.hdgSource; $("#decl").value = S.decl;
   $("#auto-adv").checked = S.autoAdvance; $("#arr-rad").value = S.arrivalRadius;
