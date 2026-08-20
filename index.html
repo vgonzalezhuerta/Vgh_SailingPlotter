@@ -218,6 +218,30 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:1px}
 
 #crono{font-family:var(--mono);font-size:34px;font-weight:600;text-align:center;
   color:var(--brass);font-variant-numeric:tabular-nums}
+/* ---------- secuencia de salida ---------- */
+#fase{text-align:center;font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;
+  font-size:11px;color:var(--mist);margin-top:3px;line-height:1.5}
+#fase b{color:var(--foam)}
+#fase .av{display:block;color:var(--brass);letter-spacing:.08em}
+#fase .av.roja{color:var(--port)}
+#pasos{margin-top:12px}
+.paso{display:grid;grid-template-columns:38px 1fr;gap:10px;align-items:baseline;
+  padding:8px 7px;border-bottom:1px solid rgba(30,81,99,.5);font-size:13px}
+.paso:last-child{border-bottom:none}
+.paso .t{font-family:var(--mono);font-size:13px;color:var(--mist);font-variant-numeric:tabular-nums}
+.paso .q{display:block;font-size:11.5px;color:var(--mist);margin-top:1px}
+.paso.on{background:rgba(232,176,75,.10);border-radius:8px;border-bottom-color:transparent}
+.paso.on .t,.paso.on b{color:var(--brass)}
+.paso.ido{opacity:.42}
+/* ---------- señales del comité ---------- */
+.sigs .sg{padding:9px 0;border-bottom:1px solid rgba(30,81,99,.5)}
+.sigs .sg:last-child{border-bottom:none}
+.sigs .cab{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.sigs .ban{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:12px;
+  color:var(--brass);font-weight:600}
+.sigs .snd{font-family:var(--mono);font-size:10.5px;color:var(--mist);white-space:nowrap}
+.sigs .que{font-size:12px;color:var(--foam);margin-top:2px}
+.sigs .det{font-size:12px;color:var(--mist);line-height:1.45;margin-top:2px}
 .sw{display:flex;align-items:center;justify-content:space-between;padding:7px 0;font-size:13px}
 .sw input{width:auto}
 
@@ -576,13 +600,41 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
   <!-- TACTICA -->
   <div class="panel" id="p-tactica">
     <div class="blk">
-      <h4>Cronómetro de salida</h4>
+      <h4>Secuencia de salida</h4>
       <div id="crono">—:—</div>
+      <div id="fase">Sin secuencia en marcha</div>
       <div class="g3" style="margin-top:10px">
         <button class="btn p" id="btn-start">5 min</button>
         <button class="btn" id="btn-sync">Sincronizar</button>
         <button class="btn d" id="btn-reset">Anular</button>
       </div>
+      <div id="pasos"></div>
+      <p class="hint">Los tiempos se toman de las <b>banderas</b>, no de los bocinazos: si no oyes
+        el sonido, la señal vale igual. Si hay <b>llamada general</b> o <b>aplazamiento</b>, la
+        nueva atención llega un minuto después de arriar la bandera: dale a «5 min» justo cuando la
+        veas bajar. «Sincronizar» cuadra el crono al minuto entero más cercano.</p>
+    </div>
+    <div class="blk">
+      <h4>Bandera preparatoria</h4>
+      <select id="prep-flag" aria-label="Bandera preparatoria">
+        <option value="P">P — sin penalización añadida</option>
+        <option value="I">I — regla 30.1, rodear un extremo</option>
+        <option value="Z">Z — regla 30.2, 20 %</option>
+        <option value="ZI">Z sobre I — reglas 30.1 y 30.2</option>
+        <option value="U">U — regla 30.3, descalificación</option>
+        <option value="N">Negra — regla 30.4, descalificación sin perdón</option>
+      </select>
+      <p class="hint" id="prep-txt"></p>
+    </div>
+    <div class="blk">
+      <h4>Si algo interrumpe la salida</h4>
+      <div class="sigs" id="sig-salida"></div>
+    </div>
+    <div class="blk">
+      <h4>Otras señales del comité</h4>
+      <div class="sigs" id="sig-otras"></div>
+      <p class="hint">Reglamento de Regatas a Vela 2025-2028. Las instrucciones de regata del club
+        mandan sobre esto: léelas, que a veces cambian la secuencia o añaden banderas.</p>
     </div>
     <div class="blk">
       <h4>Cálculos</h4>
@@ -802,7 +854,7 @@ textarea:focus{outline:2px solid var(--brass);outline-offset:1px}
    PLÓTER DE REGATA — núcleo
    ===================================================================== */
 
-const VERSION = "2026-08-15 · 18";
+const VERSION = "2026-08-20 · 19";
 const NM = 1852;
 const KN = 1.94384;                       // m/s -> nudos
 const R_EARTH = 6371000;
@@ -962,6 +1014,7 @@ const S = {
   wx: null,                   // previsión
   wxAt: 0,
   manualTwd: 250, manualTws: 12,
+  prep: "P",                                   /* bandera preparatoria en uso */
   windSource: "manual",
 
   mqtt: {
@@ -994,7 +1047,7 @@ function guardar() {
       basemap: S.basemap, seamark: S.seamark, bloqueado: S.bloqueado, mqtt: { ...S.mqtt, connected: false },
       manualTwd: S.manualTwd, manualTws: S.manualTws, arrivalRadius: S.arrivalRadius,
       autoAdvance: S.autoAdvance, northUp: S.northUp,
-      hdgSource: S.hdgSource, decl: S.decl, gpsAuto: S.gpsAuto,
+      hdgSource: S.hdgSource, decl: S.decl, gpsAuto: S.gpsAuto, prep: S.prep,
     }));
   } catch (e) {}
 }
@@ -1554,11 +1607,67 @@ function despertarMeteo() {                        /* al volver la red o la pant
    Cronómetro de salida
    ===================================================================== */
 
+/* =====================================================================
+   Salida: secuencia y señales del comité
+   ---------------------------------------------------------------------
+   Reglamento de Regatas a Vela 2025-2028. La regla 26 fija la secuencia de
+   cinco minutos, y la 30 el castigo que toca según qué bandera preparatoria
+   ondee. Los tiempos se toman de las señales VISUALES: si no oyes el bocinazo,
+   da igual, la bandera manda.
+   ===================================================================== */
+
 const GATES = [
-  { t: 300, l: "Atención", n: "Bandera de clase izada" },
-  { t: 240, l: "Preparación", n: "Bandera P izada" },
-  { t: 60, l: "Último minuto", n: "P arriada" },
-  { t: 0, l: "Salida", n: "Clase arriada" },
+  { t: 300, l: "Atención",      snd: "1 sonido",       iza: "clase",  arria: null },
+  { t: 240, l: "Preparación",   snd: "1 sonido",       iza: "prep",   arria: null },
+  { t: 60,  l: "Último minuto", snd: "1 sonido largo", iza: null,     arria: "prep" },
+  { t: 0,   l: "Salida",        snd: "1 sonido",       iza: null,     arria: "clase" },
+];
+
+/* Regla 30: qué se puede y qué no en el último minuto, según la preparatoria */
+const PREPS = {
+  P:  { nom: "P", regla: null,
+        txt: "Sin penalización añadida. Si te pasas de la línea, basta con volver al lado de pre-salida por donde quieras.",
+        ultimo: null },
+  I:  { nom: "I", regla: "30.1",
+        txt: "Regla del uno. Si en el último minuto asoma cualquier parte del casco por el lado del recorrido, tienes que volver rodeando uno de los extremos de la línea.",
+        ultimo: "Si te pasas, vuelve rodeando un extremo" },
+  Z:  { nom: "Z", regla: "30.2",
+        txt: "Si en el último minuto estás dentro del triángulo que forman los extremos de la línea y la primera baliza, y te identifican, son 20 % de penalización sin audiencia.",
+        ultimo: "Fuera del triángulo: 20 % de penalización" },
+  ZI: { nom: "Z sobre I", regla: "30.1 y 30.2",
+        txt: "Las dos a la vez: 20 % si estás en el triángulo, y además hay que volver rodeando un extremo si te pasas de la línea.",
+        ultimo: "Fuera del triángulo, y vuelve rodeando un extremo" },
+  U:  { nom: "U", regla: "30.3",
+        txt: "Si en el último minuto estás dentro del triángulo y te identifican, descalificado sin audiencia. Se te perdona si la prueba se vuelve a salir.",
+        ultimo: "Fuera del triángulo: DSQ" },
+  N:  { nom: "Negra", regla: "30.4",
+        txt: "Igual que la U pero sin perdón: descalificado sin audiencia aunque la prueba se vuelva a salir. Solo se libra si se aplaza o se anula antes de la señal de salida.",
+        ultimo: "Fuera del triángulo: DSQ y NO se perdona" },
+};
+const prepAhora = () => PREPS[S.prep] || PREPS.P;
+
+/* Lo que puede aparecer y te cambia la salida */
+const SENALES_SALIDA = [
+  ["X", "Llamada individual", "1 sonido",
+   "Alguien se pasó. Si eres tú, vuelve entero al lado de pre-salida y sal otra vez. Ojo: con la I hay que rodear un extremo. La X se mantiene hasta que vuelvan todos."],
+  ["Primer sustituto", "Llamada general", "2 sonidos",
+   "Se anula esa salida: se pasaron demasiados o no se identificaron. La nueva señal de atención llega un minuto después de arriarlo."],
+  ["GI", "Aplazamiento", "2 sonidos · 1 al arriar",
+   "Gallardete de inteligencia. Las pruebas que no han salido quedan aplazadas. Al arriarlo, la atención llega un minuto después."],
+  ["N", "Anulación", "3 sonidos",
+   "La prueba queda anulada. Vuelve a la zona de salida, que puede haber otra."],
+];
+
+/* El resto del repertorio, por si el comité saca algo que no reconoces */
+const SENALES_OTRAS = [
+  ["GI sobre H", "Aplazada · a tierra", "2 sonidos", "Más señales en tierra."],
+  ["GI sobre A", "Aplazada · no hay más", "2 sonidos", "No hay más pruebas hoy."],
+  ["N sobre H", "Anulada · a tierra", "3 sonidos", "Anulada y más señales en tierra."],
+  ["N sobre A", "Anulada · no hay más", "3 sonidos", "Anulada y no hay más pruebas hoy."],
+  ["S", "Recorrido acortado", "2 sonidos", "La llegada es en esta baliza. Se muestra antes de que el primero cruce la línea."],
+  ["C", "Cambio de recorrido", "sonidos repetidos", "Cambia el próximo tramo. Con − se acorta y con + se alarga."],
+  ["Y", "Chalecos", "1 sonido", "Obligatorio navegar con el chaleco puesto."],
+  ["L", "Aviso", "1 sonido", "A flote: acércate a voz o sigue a este barco. En tierra: hay un aviso en el tablón."],
 ];
 let zero = null, fired = new Set(), audioCtx = null;
 function beep(f, d, v = .5) {
@@ -1573,9 +1682,11 @@ function beep(f, d, v = .5) {
 }
 function arrancarCrono(s) {
   beep(880, .1, .3);
-  anotar("salida", `Secuencia de ${s / 60} min iniciada`);
+  anotar("salida", `Secuencia de ${s / 60} min iniciada · preparatoria ${prepAhora().nom}`);
   zero = Date.now() + s * 1000; fired = new Set();
+  ultPasos = null;
   pedirWakeLock();
+  if (panelActivo === "tactica") pintarSecuencia();
 }
 function segRestantes() { return zero == null ? null : (zero - Date.now()) / 1000; }
 let ultSeg = null;
@@ -3313,12 +3424,98 @@ function pintarTactica(t, ls) {
           l - ls.tLinea < 0 ? "port" : "stbd"]);
     }
   }
-  c.querySelector(".rows").innerHTML = rows.map(([a, b, cl]) =>
-    `<div class="row"><span>${a}</span><b class="${cl || ""}">${b}</b></div>`).join("");
+  c.querySelector(".rows").innerHTML = rows.length
+    ? rows.map(([a, b, cl]) =>
+        `<div class="row"><span>${a}</span><b class="${cl || ""}">${b}</b></div>`).join("")
+    : `<p class="hint">Aquí salen los números en vivo: demora y distancia a la marca activa, TWA,
+         los dos rumbos de ceñida y los grados que faltan para cada layline. Necesita
+         <b>al menos una boya</b> puesta en Regata.<br><br>
+         Si además marcas una boya como <b>Barco comité</b> y otra como <b>Boya de salida</b>,
+         añade la línea: su demora y longitud, el sesgo, qué extremo está favorecido y cuántos
+         metros gana, tu distancia perpendicular a la línea y los segundos que te sobran o te
+         faltan para llegar justo en la salida.</p>`;
 
+  pintarSecuencia();
+}
+
+/* ---------- secuencia de salida ---------- */
+
+/* GATES va de mayor a menor (300, 240, 60, 0). La última señal dada es la de
+   tiempo más pequeño que siga siendo mayor o igual al que queda: como la lista
+   es descendente, la ÚLTIMA que cumple, no la primera. La siguiente señal sí es
+   la primera con tiempo menor. */
+const gateDada = (l) => GATES.filter((g) => l <= g.t).pop();
+const gateSiguiente = (l) => GATES.find((g) => g.t < l);
+
+function ondeando(l) {
+  if (l == null || l > 300) return "nada todavía";
+  if (l > 240) return "la de clase";
+  if (l > 60) return `la de clase y la ${prepAhora().nom}`;
+  if (l > 0) return "solo la de clase";
+  return "nada: ya se arrió la de clase";
+}
+
+function textoGate(g) {
+  const p = prepAhora().nom;
+  if (g.iza === "clase") return "se iza la bandera de clase";
+  if (g.iza === "prep") return `se iza la ${p}`;
+  if (g.arria === "prep") return `se arría la ${p}`;
+  return "se arría la de clase";
+}
+
+function pintarSecuencia() {
   const l = segRestantes();
   $("#crono").textContent = l == null ? "—:—"
     : (l < 0 ? "+" : "") + `${Math.floor(Math.abs(l) / 60)}:${pad2(Math.floor(Math.abs(l) % 60))}`;
+
+  const fase = $("#fase");
+  if (l == null) {
+    fase.innerHTML = "Sin secuencia en marcha";
+  } else if (l <= 0) {
+    fase.innerHTML = `<b>En regata</b> · salida hace ${fmtHMS(-l)}`;
+  } else {
+    const dada = gateDada(l), sig = gateSiguiente(l);
+    /* se trunca igual que el crono grande, para que no bailen un segundo entre
+       ellos; y en el último minuto se calla, porque el crono ya ES esa cuenta */
+    const falta = sig ? Math.floor(l - sig.t) : 0;
+    fase.innerHTML =
+      `<b>${dada ? dada.l : "Antes de la atención"}</b> · ondea ${ondeando(l)}` +
+      (sig && sig.t > 0
+        ? `<span class="av">${sig.l} en ${Math.floor(falta / 60)}:${pad2(falta % 60)}</span>` : "") +
+      (l <= 60 && prepAhora().ultimo ? `<span class="av roja">${prepAhora().ultimo}</span>` : "");
+  }
+
+  /* no se repinta cada cuarto de segundo: solo cuando cambia algo visible */
+  const sig = l == null ? "-" : `${gateSiguiente(l)?.t ?? "x"}|${S.prep}`;
+  if (sig !== ultPasos) {
+    ultPasos = sig;
+    const proxima = l == null ? null : gateSiguiente(l);
+    $("#pasos").innerHTML = GATES.map((g) => {
+      const clase = l == null ? "" : l <= g.t ? "ido" : g === proxima ? "on" : "";
+      return `<div class="paso ${clase}">
+        <span class="t">${g.t / 60 | 0}:00</span>
+        <span><b>${g.l}</b> · ${g.snd}<span class="q">${textoGate(g)}</span></span>
+      </div>`;
+    }).join("");
+  }
+}
+let ultPasos = null;
+
+function pintarPrep() {
+  const p = prepAhora();
+  $("#prep-flag").value = S.prep;
+  $("#prep-txt").innerHTML = (p.regla ? `<b>Regla ${p.regla}.</b> ` : "") + p.txt;
+}
+
+function pintarSenales() {
+  const fila = ([ban, que, snd, det]) => `
+    <div class="sg">
+      <div class="cab"><span class="ban">${ban}</span><span class="snd">${snd}</span></div>
+      <div class="que">${que}</div>
+      <div class="det">${det}</div>
+    </div>`;
+  $("#sig-salida").innerHTML = SENALES_SALIDA.map(fila).join("");
+  $("#sig-otras").innerHTML = SENALES_OTRAS.map(fila).join("");
 }
 
 /* ---------- panel marcas ---------- */
@@ -3660,7 +3857,12 @@ function initUI() {
     zero = Date.now() + r * 1000;
     fired = new Set(GATES.filter((g) => g.t > r).map((g) => g.t));
   };
-  $("#btn-reset").onclick = () => { zero = null; };
+  $("#btn-reset").onclick = () => { zero = null; ultPasos = null; pintarSecuencia(); };
+  $("#prep-flag").onchange = (e) => {
+    S.prep = PREPS[e.target.value] ? e.target.value : "P";
+    guardar(); pintarPrep(); ultPasos = null; pintarSecuencia();
+    if (grabando) anotar("salida", `Bandera preparatoria: ${prepAhora().nom}`);
+  };
 
   $("#btn-export").onclick = () => {
     const blob = new Blob([JSON.stringify({ marks: S.marks }, null, 2)], { type: "application/json" });
@@ -3694,6 +3896,7 @@ function initUI() {
   $("#auto-adv").checked = S.autoAdvance; $("#arr-rad").value = S.arrivalRadius;
   $("#gps-auto").checked = S.gpsAuto;
   $("#orient-sel").value = S.northUp ? "norte" : "proa";
+  pintarPrep(); pintarSenales(); pintarSecuencia();
 }
 
 /* =====================================================================
